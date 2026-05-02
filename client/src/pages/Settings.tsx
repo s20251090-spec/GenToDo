@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { FileText, BookOpen, Trash2, Save, Database, Eye } from "lucide-react";
+import { FileText, BookOpen, Trash2, Save, Database, Eye, Sparkles } from "lucide-react";
 
 interface LearningSettings {
   totalPlan: string;
@@ -7,6 +7,14 @@ interface LearningSettings {
   examDate: string;
   dailyTheme: string;
   dailyGoal: string;
+}
+
+interface AIPrompt {
+  id: string;
+  name: string;
+  description: string;
+  defaultPrompt: string;
+  customPrompt: string;
 }
 
 export default function Settings({ storage, saveStorage }: any) {
@@ -19,11 +27,59 @@ export default function Settings({ storage, saveStorage }: any) {
   });
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showStorageViewer, setShowStorageViewer] = useState(false);
+  const [showPromptsModal, setShowPromptsModal] = useState(false);
+  const [selectedPrompt, setSelectedPrompt] = useState<AIPrompt | null>(null);
+  const [editingPrompt, setEditingPrompt] = useState("");
   const [storageData, setStorageData] = useState<any>(null);
   const [saved, setSaved] = useState(false);
   const [showScopeModal, setShowScopeModal] = useState(false);
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showRecycleModal, setShowRecycleModal] = useState(false);
+  const [aiPrompts, setAiPrompts] = useState<AIPrompt[]>([
+    {
+      id: "daily-plan",
+      name: "每日计划生成",
+      description: "用于生成每日学习计划的 AI 提示词",
+      defaultPrompt: `根据以下信息生成一份详细的每日学习计划：
+总学习计划：{totalPlan}
+考试范围：{examScope}
+考试时间：{examDate}
+当日主题：{dailyTheme}
+当日目标：{dailyGoal}
+已完成任务：{completedHistory}
+
+请生成具体、可执行的每日学习任务清单，每个任务包含时间估计和具体内容。`,
+      customPrompt: "",
+    },
+    {
+      id: "plan-optimize",
+      name: "计划优化",
+      description: "用于优化学习计划的 AI 提示词",
+      defaultPrompt: `请根据以下学习计划和完成情况进行优化：
+原计划：{plan}
+完成情况：{completedHistory}
+当前进度：{progress}
+
+请提供改进建议，包括：
+1. 哪些任务可以加快
+2. 哪些任务需要调整
+3. 整体计划是否需要重新安排`,
+      customPrompt: "",
+    },
+    {
+      id: "ai-chat",
+      name: "AI 对话",
+      description: "用于 AI 对话的系统提示词",
+      defaultPrompt: `你是一个专业的学习助手。你的职责是：
+1. 帮助用户理解学习内容
+2. 提供学习建议和方法
+3. 回答学习相关的问题
+4. 鼓励用户坚持学习
+
+请用友好、专业的语气与用户交流。`,
+      customPrompt: "",
+    },
+  ]);
 
   // Load settings from localStorage
   useEffect(() => {
@@ -33,6 +89,16 @@ export default function Settings({ storage, saveStorage }: any) {
         setSettings(JSON.parse(saved));
       } catch (e) {
         console.error("加载设置失败", e);
+      }
+    }
+
+    // Load AI prompts
+    const savedPrompts = localStorage.getItem("gentodo_ai_prompts");
+    if (savedPrompts) {
+      try {
+        setAiPrompts(JSON.parse(savedPrompts));
+      } catch (e) {
+        console.error("加载 AI 提示词失败", e);
       }
     }
   }, []);
@@ -70,6 +136,24 @@ export default function Settings({ storage, saveStorage }: any) {
     }
   };
 
+  // Save AI prompt
+  const handleSavePrompt = () => {
+    if (!selectedPrompt) return;
+    const updated = aiPrompts.map((p) =>
+      p.id === selectedPrompt.id ? { ...p, customPrompt: editingPrompt } : p
+    );
+    setAiPrompts(updated);
+    localStorage.setItem("gentodo_ai_prompts", JSON.stringify(updated));
+    setSelectedPrompt(null);
+    setEditingPrompt("");
+  };
+
+  // Reset prompt to default
+  const handleResetPrompt = () => {
+    if (!selectedPrompt) return;
+    setEditingPrompt(selectedPrompt.defaultPrompt);
+  };
+
   const settingsCards = [
     {
       id: "core",
@@ -78,6 +162,14 @@ export default function Settings({ storage, saveStorage }: any) {
       icon: BookOpen,
       color: "bg-blue-50 text-blue-600",
       onClick: () => setShowSettingsModal(true),
+    },
+    {
+      id: "prompts",
+      title: "AI 提示词管理",
+      status: `${aiPrompts.filter((p) => p.customPrompt).length} 个已自定义`,
+      icon: Sparkles,
+      color: "bg-amber-50 text-amber-600",
+      onClick: () => setShowPromptsModal(true),
     },
     {
       id: "storage",
@@ -128,6 +220,113 @@ export default function Settings({ storage, saveStorage }: any) {
           );
         })}
       </div>
+
+      {/* AI Prompts Modal */}
+      {showPromptsModal && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-slideUp">
+            <div className="sticky top-0 bg-white flex justify-between items-center p-6 border-b rounded-t-3xl">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <Sparkles className="w-6 h-6 text-amber-600" />
+                AI 提示词管理
+              </h3>
+              <button
+                onClick={() => {
+                  setShowPromptsModal(false);
+                  setSelectedPrompt(null);
+                  setEditingPrompt("");
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            {!selectedPrompt ? (
+              <div className="p-6 space-y-3">
+                {aiPrompts.map((prompt) => (
+                  <button
+                    key={prompt.id}
+                    onClick={() => {
+                      setSelectedPrompt(prompt);
+                      setEditingPrompt(prompt.customPrompt || prompt.defaultPrompt);
+                    }}
+                    className="w-full text-left p-4 border border-gray-200 rounded-2xl hover:border-blue-500 hover:bg-blue-50 transition"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-semibold text-gray-800">{prompt.name}</h4>
+                        <p className="text-sm text-gray-500 mt-1">{prompt.description}</p>
+                      </div>
+                      <div className="text-xs px-3 py-1 bg-gray-100 rounded-full text-gray-600">
+                        {prompt.customPrompt ? "已自定义" : "使用默认"}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="p-6 space-y-4">
+                <div>
+                  <h4 className="font-semibold text-gray-800 mb-2">{selectedPrompt.name}</h4>
+                  <p className="text-sm text-gray-500 mb-4">{selectedPrompt.description}</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    提示词内容
+                  </label>
+                  <textarea
+                    value={editingPrompt}
+                    onChange={(e) => setEditingPrompt(e.target.value)}
+                    className="w-full p-4 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono text-sm"
+                    rows={10}
+                  />
+                </div>
+
+                <div className="flex gap-2 text-xs text-gray-500">
+                  <p>💡 提示：可以使用 {'{'} totalPlan {'}'} {'{'} examScope {'}'} {'{'} examDate {'}'} 等变量</p>
+                </div>
+              </div>
+            )}
+
+            <div className="sticky bottom-0 bg-white p-6 border-t flex gap-3 rounded-b-3xl">
+              {selectedPrompt ? (
+                <>
+                  <button
+                    onClick={() => {
+                      setSelectedPrompt(null);
+                      setEditingPrompt("");
+                    }}
+                    className="flex-1 py-3 border border-gray-300 rounded-full font-semibold hover:bg-gray-50 transition"
+                  >
+                    返回
+                  </button>
+                  <button
+                    onClick={handleResetPrompt}
+                    className="flex-1 py-3 border border-gray-300 rounded-full font-semibold hover:bg-gray-50 transition"
+                  >
+                    恢复默认
+                  </button>
+                  <button
+                    onClick={handleSavePrompt}
+                    className="flex-1 py-3 bg-blue-600 text-white rounded-full font-semibold hover:bg-blue-700 transition"
+                  >
+                    保存修改
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setShowPromptsModal(false)}
+                  className="w-full py-3 bg-blue-600 text-white rounded-full font-semibold hover:bg-blue-700 transition"
+                >
+                  完成
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Core Settings Modal */}
       {showSettingsModal && (
