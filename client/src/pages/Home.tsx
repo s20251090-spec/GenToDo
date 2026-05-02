@@ -47,12 +47,10 @@ export default function Home() {
   const [aiLoading, setAiLoading] = useState(false);
   const [manusApiKey, setManusApiKey] = useState<string | null>(null);
 
-  // Initialize Manus API
+  // Initialize internal Forge API
   useEffect(() => {
-    const apiKey = import.meta.env.VITE_MANUS_API_KEY;
-    if (apiKey) {
-      setManusApiKey(apiKey);
-    }
+    // Use internal Forge API from platform
+    setManusApiKey("internal");
   }, []);
 
   // Load storage from localStorage
@@ -106,20 +104,13 @@ export default function Home() {
 
     setAiLoading(true);
     try {
-      const response = await fetch("https://api.manus.im/v1/chat/completions", {
+      const response = await fetch("/api/ai/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${manusApiKey}`,
         },
         body: JSON.stringify({
-          model: "manus-1.6-lite",
-          messages: [
-            {
-              role: "user",
-              content: `基于以下考试范围，生成一份详细的学习计划：\n\n${examScope}\n\n请提供：\n1. 学习目标\n2. 学习阶段划分\n3. 每个阶段的重点内容\n4. 复习策略\n5. 每日学习建议`,
-            },
-          ],
+          prompt: `基于以下考试范围，生成一份详细的学习计划：\n\n${examScope}\n\n请提供：\n1. 学习目标\n2. 学习阶段划分\n3. 每个阶段的重点内容\n4. 复习策略\n5. 每日学习建议`,
         }),
       });
 
@@ -128,7 +119,7 @@ export default function Home() {
       }
 
       const data = await response.json();
-      const plan = data.choices[0].message.content;
+      const plan = data.result || data.content || data.text;
 
       const newStorage = { ...storage, totalPlan: plan };
       saveStorage(newStorage);
@@ -158,20 +149,13 @@ export default function Home() {
     setAiLoading(true);
 
     try {
-      const response = await fetch("https://api.manus.im/v1/chat/completions", {
+      const response = await fetch("/api/ai/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${manusApiKey}`,
         },
         body: JSON.stringify({
-          model: "manus-1.6-lite",
-          messages: [
-            {
-              role: "user",
-              content: userInput,
-            },
-          ],
+          prompt: userInput,
         }),
       });
 
@@ -180,7 +164,7 @@ export default function Home() {
       }
 
       const data = await response.json();
-      const aiResponse = data.choices[0].message.content;
+      const aiResponse = data.result || data.content || data.text;
 
       const aiMessage = {
         id: Date.now() + 1,
