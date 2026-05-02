@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { trpc } from "@/lib/trpc";
 import {
   Sparkles,
   Zap,
@@ -15,11 +16,9 @@ import {
   Download,
   Database,
   Home as HomeIcon,
-  Loader,
 } from "lucide-react";
 
 export default function Home() {
-
   const [currentPage, setCurrentPage] = useState("dashboard");
   const [currentDate, setCurrentDate] = useState("");
   const [storage, setStorage] = useState<any>({
@@ -37,7 +36,6 @@ export default function Home() {
   const [messages, setMessages] = useState<any[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [examScope, setExamScope] = useState("");
-  const [apiUrl, setApiUrl] = useState("http://localhost:8080/api");
   const [showModals, setShowModals] = useState({
     chat: false,
     plan: false,
@@ -45,13 +43,10 @@ export default function Home() {
     recycle: false,
   });
   const [aiLoading, setAiLoading] = useState(false);
-  const [manusApiKey, setManusApiKey] = useState<string | null>(null);
 
-  // Initialize internal Forge API
-  useEffect(() => {
-    // Use internal Forge API from platform
-    setManusApiKey("internal");
-  }, []);
+  // tRPC mutations
+  const generatePlanMutation = trpc.ai.generate.useMutation();
+  const sendMessageMutation = trpc.ai.generate.useMutation();
 
   // Load storage from localStorage
   useEffect(() => {
@@ -67,10 +62,10 @@ export default function Home() {
     // Format date
     const now = new Date();
     const options: Intl.DateTimeFormatOptions = {
-      year: "numeric" as const,
-      month: "long" as const,
-      day: "numeric" as const,
-      weekday: "long" as const,
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      weekday: "long",
     };
     setCurrentDate(now.toLocaleDateString("zh-CN", options));
   }, []);
@@ -89,37 +84,18 @@ export default function Home() {
     setShowModals((prev) => ({ ...prev, [modalId]: false }));
   };
 
-  const handleSaveScope = () => {
-    const newStorage = { ...storage, examScope };
-    saveStorage(newStorage);
-    closeModal("scope");
-    alert("考试范围已保存");
-  };
-
   const handleGeneratePlan = async () => {
-    if (!examScope || !manusApiKey) {
+    if (!examScope) {
       alert("请先输入考试范围");
       return;
     }
 
     setAiLoading(true);
     try {
-      const response = await fetch("/api/ai/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: `基于以下考试范围，生成一份详细的学习计划：\n\n${examScope}\n\n请提供：\n1. 学习目标\n2. 学习阶段划分\n3. 每个阶段的重点内容\n4. 复习策略\n5. 每日学习建议`,
-        }),
-      });
+      const prompt = `基于以下考试范围，生成一份详细的学习计划：\n\n${examScope}\n\n请提供：\n1. 学习目标\n2. 学习阶段划分\n3. 每个阶段的重点内容\n4. 复习策略\n5. 每日学习建议`;
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const plan = data.result || data.content || data.text;
+      const result = await generatePlanMutation.mutateAsync({ prompt });
+      const plan = result.result;
 
       const newStorage = { ...storage, totalPlan: plan };
       saveStorage(newStorage);
@@ -127,14 +103,14 @@ export default function Home() {
       alert("学习计划已生成！");
     } catch (error) {
       console.error("计划生成失败:", error);
-      alert("计划生成失败，请检查API密钥");
+      alert(`计划生成失败：${error instanceof Error ? error.message : "未知错误"}`);
     } finally {
       setAiLoading(false);
     }
   };
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || !manusApiKey) return;
+    if (!inputValue.trim()) return;
 
     const userMessage = {
       id: Date.now(),
@@ -149,22 +125,8 @@ export default function Home() {
     setAiLoading(true);
 
     try {
-      const response = await fetch("/api/ai/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: userInput,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const aiResponse = data.result || data.content || data.text;
+      const result = await sendMessageMutation.mutateAsync({ prompt: userInput });
+      const aiResponse = result.result;
 
       const aiMessage = {
         id: Date.now() + 1,
@@ -181,13 +143,7 @@ export default function Home() {
       saveStorage(updatedStorage);
     } catch (error) {
       console.error("AI生成失败:", error);
-      const errorMessage = {
-        id: Date.now() + 1,
-        content: "抱歉，AI生成失败。请检查API密钥是否正确配置。",
-        type: "ai",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      alert(`AI生成失败：${error instanceof Error ? error.message : "未知错误"}`);
     } finally {
       setAiLoading(false);
     }
@@ -237,7 +193,10 @@ export default function Home() {
                   <p className="text-gray-500 mb-6">
                     AI将根据你的总计划、学习历史，自动为你生成今日最优ToDo清单
                   </p>
-                  <button className="bg-blue-600 text-white rounded-full shadow-sm py-3 px-8 font-medium hover:shadow-md hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2">
+                  <button
+                    onClick={() => openModal("scope")}
+                    className="bg-blue-600 text-white rounded-full shadow-sm py-3 px-8 font-medium hover:shadow-md hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2"
+                  >
                     <Zap className="w-5 h-5" />
                     生成今日ToDo
                   </button>
@@ -514,8 +473,6 @@ export default function Home() {
                     <label className="text-sm font-medium mb-1 block">后端API基础地址</label>
                     <input
                       type="text"
-                      value={apiUrl}
-                      onChange={(e) => setApiUrl(e.target.value)}
                       className="w-full bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all"
                       placeholder="请输入API基础地址"
                     />
@@ -563,7 +520,7 @@ export default function Home() {
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {messages.length === 0 ? (
-                <div className="text-center text-gray-400 py-8">开始对话，获得AI学习建议</div>
+                <div className="text-center text-gray-400 py-8">暂无对话记录</div>
               ) : (
                 messages.map((msg) => (
                   <div
@@ -571,38 +528,49 @@ export default function Home() {
                     className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                      className={`max-w-xs px-4 py-2 rounded-2xl ${
                         msg.type === "user"
                           ? "bg-blue-600 text-white"
                           : "bg-gray-100 text-gray-800"
                       }`}
                     >
-                      <p className="text-sm">{msg.content}</p>
+                      {msg.content}
                     </div>
                   </div>
                 ))
+              )}
+              {aiLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-2xl">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-gray-600 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+                      <div className="w-2 h-2 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}></div>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
             <div className="p-6 border-t flex gap-2">
               <input
                 type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
                 className="flex-1 bg-gray-50 rounded-full px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all"
                 placeholder="输入你的调整需求..."
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && !aiLoading) {
+                    handleSendMessage();
+                  }
+                }}
                 disabled={aiLoading}
               />
               <button
                 onClick={handleSendMessage}
-                disabled={aiLoading || !inputValue.trim()}
+                disabled={aiLoading}
                 className="bg-blue-600 text-white rounded-full p-3 hover:bg-blue-700 transition-all disabled:opacity-50"
               >
-                {aiLoading ? (
-                  <Loader className="w-5 h-5 animate-spin" />
-                ) : (
-                  <MessageSquare className="w-5 h-5" />
-                )}
+                发送
               </button>
             </div>
           </div>
@@ -622,10 +590,14 @@ export default function Home() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
-              <div className="text-center text-gray-400 py-12">
-                <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p>暂无总学习计划，去配置考试范围生成计划吧</p>
-              </div>
+              {storage.totalPlan ? (
+                <div className="whitespace-pre-wrap text-gray-800">{storage.totalPlan}</div>
+              ) : (
+                <div className="text-center text-gray-400 py-12">
+                  <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <p>暂无总学习计划，去配置考试范围生成计划吧</p>
+                </div>
+              )}
             </div>
             <div className="p-6 border-t flex justify-end gap-3">
               <button className="bg-gray-100 text-gray-700 rounded-full py-3 px-6 font-medium hover:bg-gray-200 transition-all">
@@ -675,13 +647,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="p-6 border-t flex justify-end gap-3">
-              <button
-                onClick={handleSaveScope}
-                className="bg-gray-100 text-gray-700 rounded-full py-3 px-6 font-medium hover:bg-gray-200 transition-all"
-              >
-                仅保存
-              </button>
+            <div className="p-6 border-t flex justify-end">
               <button
                 onClick={handleGeneratePlan}
                 disabled={aiLoading}
@@ -689,7 +655,7 @@ export default function Home() {
               >
                 {aiLoading ? (
                   <>
-                    <Loader className="w-4 h-4 animate-spin" />
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     生成中...
                   </>
                 ) : (
