@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import {
   Sparkles,
   Zap,
@@ -46,13 +45,13 @@ export default function Home() {
     recycle: false,
   });
   const [aiLoading, setAiLoading] = useState(false);
-  const [genAI, setGenAI] = useState<GoogleGenerativeAI | null>(null);
+  const [manusApiKey, setManusApiKey] = useState<string | null>(null);
 
-  // Initialize Gemini AI
+  // Initialize Manus API
   useEffect(() => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const apiKey = import.meta.env.VITE_MANUS_API_KEY;
     if (apiKey) {
-      setGenAI(new GoogleGenerativeAI(apiKey));
+      setManusApiKey(apiKey);
     }
   }, []);
 
@@ -100,18 +99,36 @@ export default function Home() {
   };
 
   const handleGeneratePlan = async () => {
-    if (!examScope || !genAI) {
+    if (!examScope || !manusApiKey) {
       alert("请先输入考试范围");
       return;
     }
 
     setAiLoading(true);
     try {
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-      const prompt = `基于以下考试范围，生成一份详细的学习计划：\n\n${examScope}\n\n请提供：\n1. 学习目标\n2. 学习阶段划分\n3. 每个阶段的重点内容\n4. 复习策略\n5. 每日学习建议`;
-      
-      const result = await model.generateContent(prompt);
-      const plan = result.response.text();
+      const response = await fetch("https://api.manus.im/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${manusApiKey}`,
+        },
+        body: JSON.stringify({
+          model: "manus-1.6-lite",
+          messages: [
+            {
+              role: "user",
+              content: `基于以下考试范围，生成一份详细的学习计划：\n\n${examScope}\n\n请提供：\n1. 学习目标\n2. 学习阶段划分\n3. 每个阶段的重点内容\n4. 复习策略\n5. 每日学习建议`,
+            },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const plan = data.choices[0].message.content;
 
       const newStorage = { ...storage, totalPlan: plan };
       saveStorage(newStorage);
@@ -126,7 +143,7 @@ export default function Home() {
   };
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || !genAI) return;
+    if (!inputValue.trim() || !manusApiKey) return;
 
     const userMessage = {
       id: Date.now(),
@@ -141,9 +158,29 @@ export default function Home() {
     setAiLoading(true);
 
     try {
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-      const result = await model.generateContent(userInput);
-      const aiResponse = result.response.text();
+      const response = await fetch("https://api.manus.im/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${manusApiKey}`,
+        },
+        body: JSON.stringify({
+          model: "manus-1.6-lite",
+          messages: [
+            {
+              role: "user",
+              content: userInput,
+            },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const aiResponse = data.choices[0].message.content;
 
       const aiMessage = {
         id: Date.now() + 1,
