@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { useStreamingAI } from "@/hooks/useStreamingAI";
+import Settings from "./Settings";
 import {
   Sparkles,
   Zap,
@@ -47,6 +48,8 @@ export default function Home() {
   const [aiLoading, setAiLoading] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [aiPrompts, setAiPrompts] = useState<any>({});
+  const [settings, setSettings] = useState<any>({});
 
   // tRPC mutations
   const generatePlanMutation = trpc.ai.generate.useMutation();
@@ -62,6 +65,31 @@ export default function Home() {
         setStorage(JSON.parse(saved));
       } catch (e) {
         console.error("加载存储失败", e);
+      }
+    }
+
+    // Load AI prompts
+    const savedPrompts = localStorage.getItem("gentodo_ai_prompts");
+    if (savedPrompts) {
+      try {
+        const prompts = JSON.parse(savedPrompts);
+        const promptMap: any = {};
+        prompts.forEach((p: any) => {
+          promptMap[p.id] = p.customPrompt || p.defaultPrompt;
+        });
+        setAiPrompts(promptMap);
+      } catch (e) {
+        console.error("加载 AI 提示词失败", e);
+      }
+    }
+
+    // Load settings
+    const savedSettings = localStorage.getItem("gentodo_settings");
+    if (savedSettings) {
+      try {
+        setSettings(JSON.parse(savedSettings));
+      } catch (e) {
+        console.error("加载设置失败", e);
       }
     }
 
@@ -90,15 +118,33 @@ export default function Home() {
     setShowModals((prev) => ({ ...prev, [modalId]: false }));
   };
 
+  // Helper function to replace template variables
+  const replacePromptVariables = (prompt: string): string => {
+    let result = prompt;
+    result = result.replace(/{totalPlan}/g, settings.totalPlan || "");
+    result = result.replace(/{examScope}/g, settings.examScope || examScope || "");
+    result = result.replace(/{examDate}/g, settings.examDate || "");
+    result = result.replace(/{dailyTheme}/g, settings.dailyTheme || "");
+    result = result.replace(/{dailyGoal}/g, settings.dailyGoal || "");
+    result = result.replace(/{completedHistory}/g, JSON.stringify(storage.learningHistory || {}));
+    result = result.replace(/{plan}/g, storage.totalPlan || "");
+    result = result.replace(/{progress}/g, `${todayProgress}%`);
+    return result;
+  };
+
   const handleGeneratePlan = async () => {
-    if (!examScope) {
+    if (!examScope && !settings.examScope) {
       alert("请先输入考试范围");
       return;
     }
 
     setAiLoading(true);
     try {
-      const prompt = `基于以下考试范围，生成一份详细的学习计划：\n\n${examScope}\n\n请提供：\n1. 学习目标\n2. 学习阶段划分\n3. 每个阶段的重点内容\n4. 复习策略\n5. 每日学习建议`;
+      // Use custom prompt if available, otherwise use default
+      let prompt = aiPrompts["daily-plan"] || `基于以下考试范围，生成一份详细的学习计划：\n\n{examScope}\n\n请提供：\n1. 学习目标\n2. 学习阶段划分\n3. 每个阶段的重点内容\n4. 复习策略\n5. 每日学习建议`;
+      
+      // Replace template variables
+      prompt = replacePromptVariables(prompt);
 
       const result = await generatePlanMutation.mutateAsync({ prompt });
       const plan = result.result;
@@ -135,7 +181,22 @@ export default function Home() {
     const aiMessageId = Date.now() + 1;
 
     try {
-      await stream(userInput, {
+      // Build system prompt with custom AI chat prompt
+      let systemPrompt = aiPrompts["ai-chat"] || `你是一个专业的学习助手。你的职责是：
+1. 帮助用户理解学习内容
+2. 提供学习建议和方法
+3. 回答学习相关的问题
+4. 鼓励用户坚持学习
+
+请用友好、专业的语气与用户交流。`;
+      
+      // Replace template variables in system prompt
+      systemPrompt = replacePromptVariables(systemPrompt);
+      
+      // Combine system prompt with user input
+      const fullPrompt = `${systemPrompt}\n\n用户问题：${userInput}`;
+
+      await stream(fullPrompt, {
         onChunk: () => {},
         onComplete: (fullText) => {
           setIsStreaming(false);
@@ -198,244 +259,130 @@ export default function Home() {
                   className={`rounded-full px-4 py-2 font-medium text-sm ${
                     hasPlan
                       ? "bg-blue-100 text-blue-600"
-                      : "bg-gray-100 text-gray-400"
+                      : "bg-gray-100 text-gray-600"
                   }`}
                 >
-                  {hasPlan ? "学习计划进行中" : "未配置学习计划"}
+                  {hasPlan ? "✓ 已配置学习计划" : "未配置学习计划"}
                 </span>
               </div>
             </div>
 
-            {!hasPlan ? (
-              <div className="bg-white rounded-2xl shadow-sm p-6 mb-8 hover:shadow-md transition-all">
-                <div className="flex flex-col items-center text-center">
-                  <Sparkles className="w-12 h-12 text-blue-600 mb-4" />
-                  <h3 className="text-xl font-bold mb-2">一键生成今日学习计划</h3>
-                  <p className="text-gray-500 mb-6">
-                    AI将根据你的总计划、学习历史，自动为你生成今日最优ToDo清单
-                  </p>
-                  <button
-                    onClick={() => openModal("scope")}
-                    className="bg-blue-600 text-white rounded-full shadow-sm py-3 px-8 font-medium hover:shadow-md hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2"
-                  >
-                    <Zap className="w-5 h-5" />
-                    生成今日ToDo
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div className="bg-blue-600 text-white rounded-2xl shadow-sm p-6 mb-8 hover:shadow-md transition-all">
-                  <div className="flex items-center mb-2">
-                    <Target className="w-5 h-5 mr-2" />
-                    <h3 className="font-semibold text-lg">今日核心聚焦目标</h3>
-                  </div>
-                  <p className="text-white/90 text-xl font-medium">
-                    {storage.totalPlan ? String(storage.totalPlan).slice(0, 100) : "暂无目标"}
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-3xl p-8 mb-8 border border-blue-200">
+              <div className="flex items-start gap-4 mb-6">
+                <Sparkles className="w-8 h-8 text-blue-600 flex-shrink-0 mt-1" />
+                <div>
+                  <h2 className="text-2xl font-bold text-blue-900 mb-2">
+                    一键生成今日学习计划
+                  </h2>
+                  <p className="text-blue-700">
+                    AI将根据你的总计划、学习目标，自动为你生成今日最优化的学习清单
                   </p>
                 </div>
+              </div>
+              <button
+                onClick={() => openModal("plan")}
+                className="bg-blue-600 text-white rounded-full px-8 py-3 font-semibold hover:bg-blue-700 transition-all flex items-center gap-2"
+              >
+                <Zap className="w-5 h-5" />
+                生成今日ToDo
+              </button>
+            </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                  <div className="bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all">
-                    <h3 className="font-semibold text-lg mb-4">当日任务完成率</h3>
-                    <div className="flex items-center justify-center">
-                      <div className="relative w-48 h-48 flex items-center justify-center">
-                        <svg className="w-full h-full" viewBox="0 0 100 100">
-                          <circle
-                            cx="50"
-                            cy="50"
-                            r="45"
-                            fill="none"
-                            stroke="#E8F3FF"
-                            strokeWidth="8"
-                            strokeLinecap="round"
-                          />
-                          <circle
-                            cx="50"
-                            cy="50"
-                            r="45"
-                            fill="none"
-                            stroke="#165DFF"
-                            strokeWidth="8"
-                            strokeLinecap="round"
-                            strokeDasharray={`${282.74 * (todayProgress / 100)} 282.74`}
-                            transform="rotate(-90 50 50)"
-                            className="transition-all duration-500"
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                          <span className="text-4xl font-bold text-blue-600">
-                            {todayProgress}%
-                          </span>
-                          <span className="text-gray-400 text-sm">已完成 / 总任务</span>
-                        </div>
-                      </div>
-                    </div>
+            {/* Quick Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <div className="bg-white rounded-2xl shadow-sm p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 text-sm mb-1">今日完成</p>
+                    <p className="text-3xl font-bold text-blue-600">{todayProgress}%</p>
                   </div>
-
-                  <div className="bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all">
-                    <h3 className="font-semibold text-lg mb-4">整体学习计划进度</h3>
-                    <div className="flex flex-col h-full justify-center">
-                      <div className="mb-6">
-                        <div className="flex justify-between mb-2">
-                          <span className="font-medium">总进度完成度</span>
-                          <span className="text-blue-600 font-bold">{totalProgress}%</span>
-                        </div>
-                        <div className="w-full h-4 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-blue-600 rounded-full transition-all duration-500"
-                            style={{ width: `${totalProgress}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-gray-50 rounded-xl p-4">
-                          <p className="text-gray-400 text-sm mb-1">开始日期</p>
-                          <p className="font-semibold">-</p>
-                        </div>
-                        <div className="bg-gray-50 rounded-xl p-4">
-                          <p className="text-gray-400 text-sm mb-1">截止日期</p>
-                          <p className="font-semibold">-</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-semibold text-lg">近期待办预览</h3>
-                    <button className="text-blue-600 text-sm font-medium hover:text-blue-700">
-                      查看全部
-                    </button>
-                  </div>
-                  <div className="text-center text-gray-400 py-8">
-                    暂无待办任务，点击上方按钮生成今日计划
-                  </div>
+                  <Target className="w-12 h-12 text-blue-100" />
                 </div>
               </div>
-            )}
+              <div className="bg-white rounded-2xl shadow-sm p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 text-sm mb-1">总体进度</p>
+                    <p className="text-3xl font-bold text-blue-600">{totalProgress}%</p>
+                  </div>
+                  <BookOpen className="w-12 h-12 text-blue-100" />
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl shadow-sm p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 text-sm mb-1">待办任务</p>
+                    <p className="text-3xl font-bold text-blue-600">{todos.length}</p>
+                  </div>
+                  <CheckSquare2 className="w-12 h-12 text-blue-100" />
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
         {/* ToDo List Page */}
         {currentPage === "todo-list" && (
           <div className="animate-fadeIn">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-              <div>
-                <h2 className="text-[clamp(1.5rem,3vw,2rem)] font-bold text-gray-800 mb-2">
-                  ToDo 任务列表
-                </h2>
-                <p className="text-gray-500">按天管理你的学习待办任务</p>
-              </div>
-              <div className="mt-4 md:mt-0 text-lg font-semibold text-blue-600 bg-blue-50 px-5 py-2 rounded-full cursor-pointer select-none">
-                2026年05月02日
-              </div>
-            </div>
-
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-              <div className="flex bg-white rounded-full shadow-sm p-1">
-                <button className="rounded-full px-5 py-2 font-medium transition-all bg-blue-600 text-white">
-                  当日待办
-                </button>
-                <button className="rounded-full px-5 py-2 font-medium transition-all text-gray-600 hover:bg-gray-50">
-                  总清单
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">待办清单</h2>
+            {todos.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-sm p-12 text-center">
+                <CheckSquare2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-400 mb-4">暂无待办任务</p>
+                <button
+                  onClick={() => openModal("plan")}
+                  className="bg-blue-600 text-white rounded-full px-6 py-2 font-semibold hover:bg-blue-700 transition-all"
+                >
+                  生成计划
                 </button>
               </div>
-              <div className="flex gap-2">
-                <select className="w-auto bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all">
-                  <option>全部日期</option>
-                  <option>今日</option>
-                  <option>未来7天</option>
-                  <option>已过期</option>
-                </select>
-                <select className="w-auto bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all">
-                  <option>全部状态</option>
-                  <option>未完成</option>
-                  <option>已完成</option>
-                </select>
+            ) : (
+              <div className="space-y-3">
+                {todos.map((todo) => (
+                  <div
+                    key={todo.id}
+                    className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4 hover:shadow-md transition-all"
+                  >
+                    <input type="checkbox" className="w-5 h-5 rounded" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-800">{todo.title}</p>
+                      <p className="text-sm text-gray-500">{todo.description}</p>
+                    </div>
+                    <Edit2 className="w-5 h-5 text-gray-400 cursor-pointer hover:text-gray-600" />
+                  </div>
+                ))}
               </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
-                <CheckSquare2 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-400">暂无待办任务</p>
-              </div>
-            </div>
+            )}
           </div>
         )}
 
-        {/* AI Editor Page */}
+        {/* AI Management Page */}
         {currentPage === "ai-editor" && (
           <div className="animate-fadeIn">
-            <div className="mb-8">
-              <h2 className="text-[clamp(1.5rem,3vw,2rem)] font-bold text-gray-800 mb-2">
-                AI 学习计划管理
-              </h2>
-              <p className="text-gray-500">管理你的学习计划、对话记录、考试范围与回收站</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">AI管理</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Chat Card */}
               <button
                 onClick={() => openModal("chat")}
-                className="bg-gradient-to-br from-blue-50 to-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all text-center group"
+                className="bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all text-left group"
               >
-                <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mb-4 mx-auto group-hover:scale-110 transition-transform">
-                  <MessageSquare className="w-7 h-7 text-blue-600" />
+                <div className="bg-blue-50 w-12 h-12 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <MessageSquare className="w-6 h-6 text-blue-600" />
                 </div>
-                <h3 className="font-bold text-lg mb-2">AI对话</h3>
-                <p className="text-sm text-gray-500">与AI沟通调整计划</p>
-                <span className="mt-3 inline-block text-xs bg-blue-100 text-blue-600 px-3 py-1 rounded-full">
-                  {storage.chatHistory.length}条记录
-                </span>
+                <h3 className="font-semibold text-lg text-gray-800 mb-1">AI对话</h3>
+                <p className="text-gray-500 text-sm">与AI进行实时对话，获得学习建议</p>
               </button>
 
-              {/* Plan Card */}
-              <button
-                onClick={() => openModal("plan")}
-                className="bg-gradient-to-br from-cyan-50 to-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all text-center group"
-              >
-                <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mb-4 mx-auto group-hover:scale-110 transition-transform">
-                  <BookOpen className="w-7 h-7 text-emerald-500" />
-                </div>
-                <h3 className="font-bold text-lg mb-2">总计划表</h3>
-                <p className="text-sm text-gray-500">查看编辑总学习计划</p>
-                <span className="mt-3 inline-block text-xs bg-emerald-100 text-emerald-500 px-3 py-1 rounded-full">
-                  {hasPlan ? "已配置" : "未配置"}
-                </span>
-              </button>
-
-              {/* Scope Card */}
+              {/* Plan Optimization Card */}
               <button
                 onClick={() => openModal("scope")}
-                className="bg-gradient-to-br from-orange-50 to-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all text-center group"
+                className="bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all text-left group"
               >
-                <div className="w-14 h-14 bg-orange-100 rounded-full flex items-center justify-center mb-4 mx-auto group-hover:scale-110 transition-transform">
-                  <FileText className="w-7 h-7 text-orange-500" />
+                <div className="bg-amber-50 w-12 h-12 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Sparkles className="w-6 h-6 text-amber-600" />
                 </div>
-                <h3 className="font-bold text-lg mb-2">考试范围</h3>
-                <p className="text-sm text-gray-500">配置考试范围与PDF</p>
-                <span className="mt-3 inline-block text-xs bg-orange-100 text-orange-500 px-3 py-1 rounded-full">
-                  {storage.examScope ? "已配置" : "未配置"}
-                </span>
-              </button>
-
-              {/* Recycle Card */}
-              <button
-                onClick={() => openModal("recycle")}
-                className="bg-gradient-to-br from-red-50 to-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all text-center group"
-              >
-                <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mb-4 mx-auto group-hover:scale-110 transition-transform">
-                  <Trash2 className="w-7 h-7 text-red-500" />
-                </div>
-                <h3 className="font-bold text-lg mb-2">回收站</h3>
-                <p className="text-sm text-gray-500">恢复或彻底删除记录</p>
-                <span className="mt-3 inline-block text-xs bg-red-100 text-red-500 px-3 py-1 rounded-full">
-                  {storage.recycleBin?.length || 0}条记录
-                </span>
+                <h3 className="font-semibold text-lg text-gray-800 mb-1">生成计划</h3>
+                <p className="text-gray-500 text-sm">基于考试范围生成学习计划</p>
               </button>
             </div>
           </div>
@@ -443,105 +390,30 @@ export default function Home() {
 
         {/* Settings Page */}
         {currentPage === "settings" && (
-          <div className="animate-fadeIn">
-            <div className="mb-8">
-              <h2 className="text-[clamp(1.5rem,3vw,2rem)] font-bold text-gray-800 mb-2">
-                系统设置
-              </h2>
-              <p className="text-gray-500">配置你的考试范围，生成标准化总学习计划</p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6">
-              <div className="bg-white rounded-2xl shadow-sm p-6">
-                <h3 className="font-semibold text-lg mb-4 flex items-center">
-                  <FileText className="w-5 h-5 mr-2 text-blue-600" />
-                  考试范围配置
-                </h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">考试范围详情</label>
-                    <textarea
-                      className="w-full bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all min-h-[180px] resize-none"
-                      placeholder="请输入你的考试信息..."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">上传考试范围PDF（可选）</label>
-                    <input
-                      type="file"
-                      accept=".pdf"
-                      className="w-full bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all"
-                    />
-                  </div>
-
-                  <div className="flex justify-end pt-2">
-                    <button className="bg-blue-600 text-white rounded-full py-3 px-8 font-medium hover:bg-blue-700 transition-all flex items-center gap-2">
-                      <Sparkles className="w-4 h-4" />
-                      提交生成复习计划
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl shadow-sm p-6">
-                <h3 className="font-semibold text-lg mb-4 flex items-center">
-                  <SettingsIcon className="w-5 h-5 mr-2 text-blue-600" />
-                  系统配置
-                </h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">后端API基础地址</label>
-                    <input
-                      type="text"
-                      className="w-full bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all"
-                      placeholder="请输入API基础地址"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl shadow-sm p-6">
-                <h3 className="font-semibold text-lg mb-4 flex items-center">
-                  <Database className="w-5 h-5 mr-2 text-blue-600" />
-                  数据管理
-                </h3>
-                <div className="space-y-3">
-                  <button className="w-full bg-gray-100 text-gray-700 rounded-full py-3 px-6 font-medium hover:bg-gray-200 transition-all text-left flex items-center">
-                    <Download className="w-4 h-4 mr-2" />
-                    一键导出所有数据
-                  </button>
-                  <button className="w-full bg-gray-100 text-red-600 rounded-full py-3 px-6 font-medium hover:bg-red-50 transition-all text-left flex items-center">
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    清空所有本地数据
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-gray-100 rounded-2xl p-4 text-center text-sm text-gray-500">
-                <p>产品名称：GenToDo | 版本号：v2.0.0 | © 2026 GenToDo 保留所有权利</p>
-              </div>
-            </div>
-          </div>
+          <Settings storage={storage} saveStorage={saveStorage} />
         )}
       </main>
 
-      {/* Modals */}
+      {/* Chat Modal */}
       {showModals.chat && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white rounded-2xl w-full max-w-2xl h-[80vh] flex flex-col animate-slideUp">
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-2xl h-[80vh] flex flex-col animate-slideUp">
             <div className="flex justify-between items-center p-6 border-b">
               <h3 className="text-xl font-bold">AI对话记录</h3>
               <button
                 onClick={() => closeModal("chat")}
                 className="text-gray-400 hover:text-gray-600"
               >
-                <X className="w-6 h-6" />
+                ✕
               </button>
             </div>
+
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {messages.length === 0 ? (
-                <div className="text-center text-gray-400 py-8">暂无对话记录</div>
+                <div className="text-center text-gray-400 py-12">
+                  <MessageSquare className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <p>暂无对话记录</p>
+                </div>
               ) : (
                 messages.map((msg) => (
                   <div
@@ -549,18 +421,16 @@ export default function Home() {
                     className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-lg px-4 py-2 rounded-2xl ${
+                      className={`max-w-xs px-4 py-3 rounded-2xl ${
                         msg.type === "user"
                           ? "bg-blue-600 text-white"
                           : "bg-gray-100 text-gray-800"
                       }`}
                     >
-                      {msg.type === "user" ? (
-                        msg.content
+                      {msg.type === "ai" ? (
+                        <MarkdownRenderer content={msg.content} />
                       ) : (
-                        <div className="text-sm">
-                          <MarkdownRenderer content={msg.content} />
-                        </div>
+                        <p>{msg.content}</p>
                       )}
                     </div>
                   </div>
@@ -568,154 +438,137 @@ export default function Home() {
               )}
               {isStreaming && streamingText && (
                 <div className="flex justify-start">
-                  <div className="max-w-lg bg-gray-100 text-gray-800 px-4 py-2 rounded-2xl">
-                    <div className="text-sm">
-                      <MarkdownRenderer content={streamingText} />
-                    </div>
-                  </div>
-                </div>
-              )}
-              {isStreaming && !streamingText && (
-                <div className="flex justify-start">
-                  <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-2xl">
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-gray-600 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
-                      <div className="w-2 h-2 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}></div>
-                    </div>
+                  <div className="max-w-xs px-4 py-3 rounded-2xl bg-gray-100 text-gray-800">
+                    <MarkdownRenderer content={streamingText} />
                   </div>
                 </div>
               )}
             </div>
-            <div className="p-6 border-t flex gap-2">
+
+            <div className="p-6 border-t flex gap-3">
               <input
                 type="text"
-                className="flex-1 bg-gray-50 rounded-full px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all"
-                placeholder="输入你的调整需求..."
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter" && !aiLoading) {
-                    handleSendMessage();
-                  }
-                }}
-                disabled={aiLoading}
+                onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+                placeholder="输入你的问题..."
+                className="flex-1 bg-gray-50 rounded-full px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all"
               />
               <button
                 onClick={handleSendMessage}
-                disabled={aiLoading}
+                disabled={aiLoading || isStreaming}
                 className="bg-blue-600 text-white rounded-full p-3 hover:bg-blue-700 transition-all disabled:opacity-50"
               >
-                发送
+                <MessageSquare className="w-5 h-5" />
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Plan Generation Modal */}
       {showModals.plan && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white rounded-2xl w-full max-w-3xl h-[80vh] flex flex-col animate-slideUp">
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-2xl animate-slideUp">
             <div className="flex justify-between items-center p-6 border-b">
-              <h3 className="text-xl font-bold">总学习计划</h3>
+              <h3 className="text-xl font-bold">生成学习计划</h3>
               <button
                 onClick={() => closeModal("plan")}
                 className="text-gray-400 hover:text-gray-600"
               >
-                <X className="w-6 h-6" />
+                ✕
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6">
-              {storage.totalPlan ? (
-                <MarkdownRenderer content={storage.totalPlan} className="prose prose-sm" />
-              ) : (
-                <div className="text-center text-gray-400 py-12">
-                  <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p>暂无总学习计划，去配置考试范围生成计划吧</p>
-                </div>
-              )}
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  考试范围
+                </label>
+                <textarea
+                  value={examScope || settings.examScope || ""}
+                  onChange={(e) => setExamScope(e.target.value)}
+                  placeholder="请输入考试范围..."
+                  className="w-full bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all resize-none"
+                  rows={6}
+                />
+              </div>
             </div>
-            <div className="p-6 border-t flex justify-end gap-3">
-              <button className="bg-gray-100 text-gray-700 rounded-full py-3 px-6 font-medium hover:bg-gray-200 transition-all">
-                AI优化计划
-              </button>
+
+            <div className="p-6 border-t flex gap-3">
               <button
                 onClick={() => closeModal("plan")}
-                className="bg-blue-600 text-white rounded-full py-3 px-6 font-medium hover:bg-blue-700 transition-all"
+                className="flex-1 bg-gray-100 text-gray-700 rounded-full py-3 px-6 font-medium hover:bg-gray-200 transition-all"
               >
-                完成
+                取消
+              </button>
+              <button
+                onClick={handleGeneratePlan}
+                disabled={aiLoading}
+                className="flex-1 bg-blue-600 text-white rounded-full py-3 px-6 font-medium hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-5 h-5" />
+                {aiLoading ? "生成中..." : "AI生成计划"}
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Scope Modal */}
       {showModals.scope && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white rounded-2xl w-full max-w-2xl h-[80vh] flex flex-col animate-slideUp">
-            <div className="flex justify-between items-center p-6 border-b">
-              <h3 className="text-xl font-bold">考试范围配置</h3>
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-slideUp">
+            <div className="sticky top-0 bg-white flex justify-between items-center p-6 border-b rounded-t-3xl">
+              <h3 className="text-xl font-bold">学习计划</h3>
               <button
                 onClick={() => closeModal("scope")}
                 className="text-gray-400 hover:text-gray-600"
               >
-                <X className="w-6 h-6" />
+                ✕
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium mb-1 block">考试范围文本</label>
-                  <textarea
-                    value={examScope}
-                    onChange={(e) => setExamScope(e.target.value)}
-                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all min-h-[200px] resize-none"
-                    placeholder="请输入考试范围..."
-                  />
+
+            <div className="p-6">
+              {storage.totalPlan ? (
+                <MarkdownRenderer content={storage.totalPlan} />
+              ) : (
+                <div className="text-center text-gray-400 py-12">
+                  <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <p>暂无学习计划，请先生成计划</p>
                 </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block">上传PDF</label>
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all"
-                  />
-                </div>
-              </div>
+              )}
             </div>
-            <div className="p-6 border-t flex justify-end">
+
+            <div className="sticky bottom-0 bg-white p-6 border-t flex gap-3 rounded-b-3xl">
               <button
-                onClick={handleGeneratePlan}
-                disabled={aiLoading}
-                className="bg-blue-600 text-white rounded-full py-3 px-6 font-medium hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2"
+                onClick={() => closeModal("scope")}
+                className="flex-1 bg-gray-100 text-gray-700 rounded-full py-3 px-6 font-medium hover:bg-gray-200 transition-all"
               >
-                {aiLoading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    生成中...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    AI生成计划
-                  </>
-                )}
+                关闭
+              </button>
+              <button
+                onClick={() => openModal("plan")}
+                className="flex-1 bg-blue-600 text-white rounded-full py-3 px-6 font-medium hover:bg-blue-700 transition-all"
+              >
+                重新生成
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Recycle Modal */}
       {showModals.recycle && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white rounded-2xl w-full max-w-2xl h-[80vh] flex flex-col animate-slideUp">
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-2xl h-[80vh] flex flex-col animate-slideUp">
             <div className="flex justify-between items-center p-6 border-b">
               <h3 className="text-xl font-bold">回收站</h3>
               <button
                 onClick={() => closeModal("recycle")}
                 className="text-gray-400 hover:text-gray-600"
               >
-                <X className="w-6 h-6" />
+                ✕
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
@@ -724,9 +577,12 @@ export default function Home() {
                 <p>回收站为空</p>
               </div>
             </div>
-            <div className="p-6 border-t flex justify-end">
-              <button className="text-red-600 rounded-full py-3 px-6 font-medium hover:bg-red-50 transition-all">
-                清空回收站
+            <div className="p-6 border-t flex justify-end gap-3">
+              <button
+                onClick={() => closeModal("recycle")}
+                className="bg-gray-100 text-gray-700 rounded-full py-3 px-6 font-medium hover:bg-gray-200 transition-all"
+              >
+                关闭
               </button>
             </div>
           </div>
@@ -734,26 +590,24 @@ export default function Home() {
       )}
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 max-w-6xl mx-auto w-full z-40">
-        <div className="flex justify-around items-center h-20 px-4">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setCurrentPage(item.id)}
-                className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
-                  currentPage === item.id
-                    ? "text-blue-600 bg-blue-50"
-                    : "text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                <Icon className="w-6 h-6" />
-                <span className="text-xs font-medium">{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around max-w-6xl mx-auto">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setCurrentPage(item.id)}
+              className={`flex-1 py-4 px-2 flex flex-col items-center gap-1 transition-all ${
+                currentPage === item.id
+                  ? "text-blue-600"
+                  : "text-gray-400 hover:text-gray-600"
+              }`}
+            >
+              <Icon className="w-6 h-6" />
+              <span className="text-xs font-medium">{item.label}</span>
+            </button>
+          );
+        })}
       </nav>
     </div>
   );
