@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import {
   Sparkles,
   Zap,
@@ -15,9 +16,11 @@ import {
   Download,
   Database,
   Home as HomeIcon,
+  Loader,
 } from "lucide-react";
 
 export default function Home() {
+
   const [currentPage, setCurrentPage] = useState("dashboard");
   const [currentDate, setCurrentDate] = useState("");
   const [storage, setStorage] = useState<any>({
@@ -42,6 +45,16 @@ export default function Home() {
     scope: false,
     recycle: false,
   });
+  const [aiLoading, setAiLoading] = useState(false);
+  const [genAI, setGenAI] = useState<GoogleGenerativeAI | null>(null);
+
+  // Initialize Gemini AI
+  useEffect(() => {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (apiKey) {
+      setGenAI(new GoogleGenerativeAI(apiKey));
+    }
+  }, []);
 
   // Load storage from localStorage
   useEffect(() => {
@@ -86,28 +99,77 @@ export default function Home() {
     alert("考试范围已保存");
   };
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return;
+  const handleGeneratePlan = async () => {
+    if (!examScope || !genAI) {
+      alert("请先输入考试范围");
+      return;
+    }
 
-    const newMessage = {
+    setAiLoading(true);
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const prompt = `基于以下考试范围，生成一份详细的学习计划：\n\n${examScope}\n\n请提供：\n1. 学习目标\n2. 学习阶段划分\n3. 每个阶段的重点内容\n4. 复习策略\n5. 每日学习建议`;
+      
+      const result = await model.generateContent(prompt);
+      const plan = result.response.text();
+
+      const newStorage = { ...storage, totalPlan: plan };
+      saveStorage(newStorage);
+      closeModal("scope");
+      alert("学习计划已生成！");
+    } catch (error) {
+      console.error("计划生成失败:", error);
+      alert("计划生成失败，请检查API密钥");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || !genAI) return;
+
+    const userMessage = {
       id: Date.now(),
       content: inputValue,
       type: "user",
       timestamp: new Date(),
     };
 
-    setMessages([...messages, newMessage]);
+    setMessages([...messages, userMessage]);
+    const userInput = inputValue;
     setInputValue("");
+    setAiLoading(true);
 
-    setTimeout(() => {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const result = await model.generateContent(userInput);
+      const aiResponse = result.response.text();
+
       const aiMessage = {
         id: Date.now() + 1,
-        content: "这是一个模拟的AI响应。需要后端API支持实现真实对话功能。",
+        content: aiResponse,
         type: "ai",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, aiMessage]);
-    }, 500);
+
+      const updatedStorage = {
+        ...storage,
+        chatHistory: [...(storage.chatHistory || []), userMessage, aiMessage],
+      };
+      saveStorage(updatedStorage);
+    } catch (error) {
+      console.error("AI生成失败:", error);
+      const errorMessage = {
+        id: Date.now() + 1,
+        content: "抱歉，AI生成失败。请检查API密钥是否正确配置。",
+        type: "ai",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const navItems = [
@@ -479,16 +541,47 @@ export default function Home() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              <div className="text-center text-gray-400 py-8">暂无对话记录</div>
+              {messages.length === 0 ? (
+                <div className="text-center text-gray-400 py-8">开始对话，获得AI学习建议</div>
+              ) : (
+                messages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                        msg.type === "user"
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-100 text-gray-800"
+                      }`}
+                    >
+                      <p className="text-sm">{msg.content}</p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
             <div className="p-6 border-t flex gap-2">
               <input
                 type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
                 className="flex-1 bg-gray-50 rounded-full px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all"
                 placeholder="输入你的调整需求..."
+                disabled={aiLoading}
               />
-              <button className="bg-blue-600 text-white rounded-full p-3 hover:bg-blue-700 transition-all">
-                发送
+              <button
+                onClick={handleSendMessage}
+                disabled={aiLoading || !inputValue.trim()}
+                className="bg-blue-600 text-white rounded-full p-3 hover:bg-blue-700 transition-all disabled:opacity-50"
+              >
+                {aiLoading ? (
+                  <Loader className="w-5 h-5 animate-spin" />
+                ) : (
+                  <MessageSquare className="w-5 h-5" />
+                )}
               </button>
             </div>
           </div>
@@ -561,12 +654,29 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="p-6 border-t flex justify-end">
+            <div className="p-6 border-t flex justify-end gap-3">
               <button
                 onClick={handleSaveScope}
-                className="bg-blue-600 text-white rounded-full py-3 px-6 font-medium hover:bg-blue-700 transition-all"
+                className="bg-gray-100 text-gray-700 rounded-full py-3 px-6 font-medium hover:bg-gray-200 transition-all"
               >
-                保存修改
+                仅保存
+              </button>
+              <button
+                onClick={handleGeneratePlan}
+                disabled={aiLoading}
+                className="bg-blue-600 text-white rounded-full py-3 px-6 font-medium hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {aiLoading ? (
+                  <>
+                    <Loader className="w-4 h-4 animate-spin" />
+                    生成中...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    AI生成计划
+                  </>
+                )}
               </button>
             </div>
           </div>
