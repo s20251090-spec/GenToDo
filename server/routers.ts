@@ -19,6 +19,30 @@ export const appRouter = router({
   }),
 
   ai: router({
+    generateDailyPlan: publicProcedure
+      .input(z.object({
+        totalPlan: z.string(),
+        examScope: z.string(),
+        examDate: z.string(),
+        dailyTheme: z.string(),
+        dailyGoal: z.string(),
+        completedHistory: z.array(z.object({
+          taskContent: z.string(),
+          completedAt: z.string(),
+        })).default([]),
+      }))
+      .mutation(async ({ input }) => {
+        const { generateDailyPlan, parsePlanOutput, validatePlanOutput } = await import("./ai-service");
+        try {
+          const output = await generateDailyPlan(input);
+          const isValid = validatePlanOutput(output);
+          const tasks = isValid ? parsePlanOutput(output) : [];
+          return { rawOutput: output, tasks, isValid, success: true };
+        } catch (error) {
+          throw new Error(`Failed to generate plan: ${error instanceof Error ? error.message : "Unknown error"}`);
+        }
+      }),
+
     generate: publicProcedure
       .input(z.object({ prompt: z.string() }))
       .mutation(async ({ input }) => {
