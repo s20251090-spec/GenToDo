@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
+import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import {
   Sparkles,
   Zap,
@@ -43,6 +44,8 @@ export default function Home() {
     recycle: false,
   });
   const [aiLoading, setAiLoading] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
 
   // tRPC mutations
   const generatePlanMutation = trpc.ai.generate.useMutation();
@@ -528,13 +531,19 @@ export default function Home() {
                     className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-xs px-4 py-2 rounded-2xl ${
+                      className={`max-w-lg px-4 py-2 rounded-2xl ${
                         msg.type === "user"
                           ? "bg-blue-600 text-white"
                           : "bg-gray-100 text-gray-800"
                       }`}
                     >
-                      {msg.content}
+                      {msg.type === "user" ? (
+                        msg.content
+                      ) : (
+                        <div className="text-sm">
+                          <MarkdownRenderer content={msg.content} />
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))
@@ -591,7 +600,7 @@ export default function Home() {
             </div>
             <div className="flex-1 overflow-y-auto p-6">
               {storage.totalPlan ? (
-                <div className="whitespace-pre-wrap text-gray-800">{storage.totalPlan}</div>
+                <MarkdownRenderer content={storage.totalPlan} className="prose prose-sm" />
               ) : (
                 <div className="text-center text-gray-400 py-12">
                   <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
