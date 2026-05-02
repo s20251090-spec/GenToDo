@@ -1,35 +1,91 @@
-import { useState } from "react";
-import { FileText, BookOpen, Trash2, Save } from "lucide-react";
+import { useState, useEffect } from "react";
+import { FileText, BookOpen, Trash2, Save, Database, Eye } from "lucide-react";
+
+interface LearningSettings {
+  totalPlan: string;
+  examScope: string;
+  examDate: string;
+  dailyTheme: string;
+  dailyGoal: string;
+}
 
 export default function Settings({ storage, saveStorage }: any) {
-  const [examScope, setExamScope] = useState(storage.examScope || "");
+  const [settings, setSettings] = useState<LearningSettings>({
+    totalPlan: "",
+    examScope: "",
+    examDate: "",
+    dailyTheme: "",
+    dailyGoal: "",
+  });
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showStorageViewer, setShowStorageViewer] = useState(false);
+  const [storageData, setStorageData] = useState<any>(null);
+  const [saved, setSaved] = useState(false);
   const [showScopeModal, setShowScopeModal] = useState(false);
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showRecycleModal, setShowRecycleModal] = useState(false);
 
-  const handleSaveScope = () => {
-    const newStorage = { ...storage, examScope };
-    saveStorage(newStorage);
-    setShowScopeModal(false);
-    alert("考试范围已保存");
+  // Load settings from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("gentodo_settings");
+    if (saved) {
+      try {
+        setSettings(JSON.parse(saved));
+      } catch (e) {
+        console.error("加载设置失败", e);
+      }
+    }
+  }, []);
+
+  // Save settings
+  const handleSaveSettings = () => {
+    localStorage.setItem("gentodo_settings", JSON.stringify(settings));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  // View storage
+  const handleViewStorage = () => {
+    const allStorage = {
+      settings: localStorage.getItem("gentodo_settings"),
+      storage: localStorage.getItem("gentodo_storage"),
+      chatHistory: localStorage.getItem("gentodo_chatHistory"),
+    };
+    setStorageData(allStorage);
+    setShowStorageViewer(!showStorageViewer);
+  };
+
+  // Clear all storage
+  const handleClearStorage = () => {
+    if (window.confirm("确定要清除所有数据吗？此操作不可撤销。")) {
+      localStorage.clear();
+      setSettings({
+        totalPlan: "",
+        examScope: "",
+        examDate: "",
+        dailyTheme: "",
+        dailyGoal: "",
+      });
+      setStorageData(null);
+    }
   };
 
   const settingsCards = [
     {
-      id: "scope",
-      title: "考试范围配置",
-      status: storage.examScope ? "已配置" : "未配置",
+      id: "core",
+      title: "核心学习信息",
+      status: settings.examDate ? "已配置" : "未配置",
       icon: BookOpen,
-      color: "bg-orange-50 text-orange-600",
-      onClick: () => setShowScopeModal(true),
+      color: "bg-blue-50 text-blue-600",
+      onClick: () => setShowSettingsModal(true),
     },
     {
-      id: "plan",
-      title: "总学习计划",
-      status: storage.totalPlan ? "已配置" : "未配置",
-      icon: FileText,
-      color: "bg-cyan-50 text-cyan-600",
-      onClick: () => setShowPlanModal(true),
+      id: "storage",
+      title: "查看存储数据",
+      status: "本地存储",
+      icon: Database,
+      color: "bg-purple-50 text-purple-600",
+      onClick: handleViewStorage,
     },
     {
       id: "recycle",
@@ -73,6 +129,186 @@ export default function Settings({ storage, saveStorage }: any) {
         })}
       </div>
 
+      {/* Core Settings Modal */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-slideUp">
+            <div className="sticky top-0 bg-white flex justify-between items-center p-6 border-b rounded-t-3xl">
+              <h3 className="text-xl font-bold">核心学习信息配置</h3>
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* 全周期总学习计划表 */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  全周期总学习计划表 <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={settings.totalPlan}
+                  onChange={(e) => setSettings({ ...settings, totalPlan: e.target.value })}
+                  placeholder="例如：第1周复习基础知识，第2周做题训练，第3周查漏补缺..."
+                  className="w-full p-4 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  rows={4}
+                />
+                <p className="text-xs text-gray-500 mt-2">描述整个学习周期的总体计划和目标分配</p>
+              </div>
+
+              {/* 考试范围 */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  考试范围 <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={settings.examScope}
+                  onChange={(e) => setSettings({ ...settings, examScope: e.target.value })}
+                  placeholder="例如：第1-5章，重点是第3章的核心概念和公式推导..."
+                  className="w-full p-4 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  rows={4}
+                />
+                <p className="text-xs text-gray-500 mt-2">明确考试涵盖的知识范围和重点</p>
+              </div>
+
+              {/* 考试时间 */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  考试时间 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={settings.examDate}
+                  onChange={(e) => setSettings({ ...settings, examDate: e.target.value })}
+                  className="w-full p-4 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-2">设置考试日期，系统将自动计算倒计时</p>
+              </div>
+
+              {/* 当日学习主题 */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  当日学习主题
+                </label>
+                <input
+                  type="text"
+                  value={settings.dailyTheme}
+                  onChange={(e) => setSettings({ ...settings, dailyTheme: e.target.value })}
+                  placeholder="例如：第3章重点知识梳理"
+                  className="w-full p-4 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-2">指定今天的学习主题，作为 AI 生成计划的方向</p>
+              </div>
+
+              {/* 当日核心目标 */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  当日核心目标
+                </label>
+                <input
+                  type="text"
+                  value={settings.dailyGoal}
+                  onChange={(e) => setSettings({ ...settings, dailyGoal: e.target.value })}
+                  placeholder="例如：掌握核心概念，完成 10 道练习题"
+                  className="w-full p-4 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-2">明确今天的学习目标，帮助 AI 生成更精准的计划</p>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-white p-6 border-t flex gap-3 rounded-b-3xl">
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="flex-1 py-3 border border-gray-300 rounded-full font-semibold hover:bg-gray-50 transition"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSaveSettings}
+                className={`flex-1 py-3 rounded-full font-semibold transition flex items-center justify-center gap-2 ${
+                  saved
+                    ? "bg-green-600 text-white"
+                    : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+              >
+                <Save className="w-5 h-5" />
+                {saved ? "已保存" : "保存设置"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Storage Viewer Modal */}
+      {showStorageViewer && storageData && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-slideUp">
+            <div className="sticky top-0 bg-white flex justify-between items-center p-6 border-b rounded-t-3xl">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <Eye className="w-6 h-6 text-blue-600" />
+                本地存储数据
+              </h3>
+              <button
+                onClick={() => setShowStorageViewer(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Settings */}
+              <div>
+                <h3 className="font-semibold text-gray-700 mb-2">学习计划设置</h3>
+                <pre className="bg-gray-50 p-4 rounded-xl overflow-auto max-h-48 text-xs">
+                  {storageData.settings
+                    ? JSON.stringify(JSON.parse(storageData.settings), null, 2)
+                    : "无数据"}
+                </pre>
+              </div>
+
+              {/* General Storage */}
+              <div>
+                <h3 className="font-semibold text-gray-700 mb-2">通用存储</h3>
+                <pre className="bg-gray-50 p-4 rounded-xl overflow-auto max-h-48 text-xs">
+                  {storageData.storage
+                    ? JSON.stringify(JSON.parse(storageData.storage), null, 2)
+                    : "无数据"}
+                </pre>
+              </div>
+
+              {/* Chat History */}
+              <div>
+                <h3 className="font-semibold text-gray-700 mb-2">聊天历史</h3>
+                <pre className="bg-gray-50 p-4 rounded-xl overflow-auto max-h-48 text-xs">
+                  {storageData.chatHistory
+                    ? JSON.stringify(JSON.parse(storageData.chatHistory), null, 2)
+                    : "无数据"}
+                </pre>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-white p-6 border-t flex gap-3 rounded-b-3xl">
+              <button
+                onClick={() => setShowStorageViewer(false)}
+                className="flex-1 py-3 border border-gray-300 rounded-full font-semibold hover:bg-gray-50 transition"
+              >
+                关闭
+              </button>
+              <button
+                onClick={handleClearStorage}
+                className="flex-1 py-3 bg-red-600 text-white rounded-full font-semibold hover:bg-red-700 transition"
+              >
+                清除所有数据
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Scope Modal */}
       {showScopeModal && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
@@ -90,8 +326,8 @@ export default function Settings({ storage, saveStorage }: any) {
               <div>
                 <label className="text-sm font-medium mb-1 block">考试范围文本</label>
                 <textarea
-                  value={examScope}
-                  onChange={(e) => setExamScope(e.target.value)}
+                  value={settings.examScope}
+                  onChange={(e) => setSettings({ ...settings, examScope: e.target.value })}
                   className="w-full bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all min-h-[200px] resize-none"
                   placeholder="请输入考试范围..."
                 />
@@ -113,7 +349,12 @@ export default function Settings({ storage, saveStorage }: any) {
                 取消
               </button>
               <button
-                onClick={handleSaveScope}
+                onClick={() => {
+                  const newStorage = { ...storage, examScope: settings.examScope };
+                  saveStorage(newStorage);
+                  setShowScopeModal(false);
+                  alert("考试范围已保存");
+                }}
                 className="flex-1 bg-blue-600 text-white rounded-full py-3 px-6 font-medium hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
               >
                 <Save className="w-4 h-4" />
