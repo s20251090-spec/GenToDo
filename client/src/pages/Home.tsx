@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
+import { useStreamingAI } from "@/hooks/useStreamingAI";
 import {
   Sparkles,
   Zap,
@@ -49,7 +50,9 @@ export default function Home() {
 
   // tRPC mutations
   const generatePlanMutation = trpc.ai.generate.useMutation();
-  const sendMessageMutation = trpc.ai.generate.useMutation();
+  
+  // Streaming hook
+  const { stream, streamingText: currentStreamingText, isStreaming: currentIsStreaming, reset: resetStreaming } = useStreamingAI();
 
   // Load storage from localStorage
   useEffect(() => {
@@ -127,28 +130,43 @@ export default function Home() {
     setInputValue("");
     setAiLoading(true);
 
+    setIsStreaming(true);
+    setStreamingText("");
+    const aiMessageId = Date.now() + 1;
+
     try {
-      const result = await sendMessageMutation.mutateAsync({ prompt: userInput });
-      const aiResponse = result.result;
+      await stream(userInput, {
+        onChunk: () => {},
+        onComplete: (fullText) => {
+          setIsStreaming(false);
+          const aiMessage = {
+            id: aiMessageId,
+            content: fullText,
+            type: "ai",
+            timestamp: new Date(),
+          };
+          setMessages((prev) => {
+            const filtered = prev.filter((m) => m.id !== aiMessageId);
+            return [...filtered, aiMessage];
+          });
+          setStreamingText("");
 
-      const aiMessage = {
-        id: Date.now() + 1,
-        content: aiResponse,
-        type: "ai",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, aiMessage]);
-
-      const updatedStorage = {
-        ...storage,
-        chatHistory: [...(storage.chatHistory || []), userMessage, aiMessage],
-      };
-      saveStorage(updatedStorage);
+          const updatedStorage = {
+            ...storage,
+            chatHistory: [...(storage.chatHistory || []), userMessage, aiMessage],
+          };
+          saveStorage(updatedStorage);
+        },
+        onError: (error) => {
+          setIsStreaming(false);
+          console.error("AI生成失败:", error);
+          alert(`AI生成失败：${error.message}`);
+        },
+      });
     } catch (error) {
+      setIsStreaming(false);
       console.error("AI生成失败:", error);
       alert(`AI生成失败：${error instanceof Error ? error.message : "未知错误"}`);
-    } finally {
-      setAiLoading(false);
     }
   };
 
@@ -548,7 +566,16 @@ export default function Home() {
                   </div>
                 ))
               )}
-              {aiLoading && (
+              {isStreaming && streamingText && (
+                <div className="flex justify-start">
+                  <div className="max-w-lg bg-gray-100 text-gray-800 px-4 py-2 rounded-2xl">
+                    <div className="text-sm">
+                      <MarkdownRenderer content={streamingText} />
+                    </div>
+                  </div>
+                </div>
+              )}
+              {isStreaming && !streamingText && (
                 <div className="flex justify-start">
                   <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-2xl">
                     <div className="flex gap-1">
