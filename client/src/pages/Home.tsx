@@ -1,459 +1,760 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
+import { trpc } from "@/lib/trpc";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
+import { useStreamingAI } from "@/hooks/useStreamingAI";
 import {
-  Calendar,
-  Target,
-  FileText,
-  Shuffle,
-  Send,
   Sparkles,
-  ChevronLeft,
-  ChevronRight,
+  Zap,
+  Target,
+  CheckSquare2,
+  Settings as SettingsIcon,
+  MessageSquare,
+  BookOpen,
+  FileText,
+  Trash2,
+  Edit2,
   X,
-  ListChecks,
+  Eye,
+  Download,
+  Database,
+  Home as HomeIcon,
 } from "lucide-react";
 
 export default function Home() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1);
-  const [planDate, setPlanDate] = useState("");
-  const [todayTarget, setTodayTarget] = useState("");
-  const [planRemark, setPlanRemark] = useState("");
-  const [modifyInput, setModifyInput] = useState("");
-  const [aiContent, setAiContent] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [editTaskContent, setEditTaskContent] = useState("");
-  const [longPressTaskId, setLongPressTaskId] = useState<string | null>(null);
-  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [currentPage, setCurrentPage] = useState("dashboard");
+  const [currentDate, setCurrentDate] = useState("");
+  const [storage, setStorage] = useState<any>({
+    examScope: null,
+    totalPlan: null,
+    chatHistory: [],
+    todoHistory: {},
+    learningHistory: {},
+    recycleBin: [],
+  });
 
-  // Initialize date to today
+  const [todayProgress, setTodayProgress] = useState(0);
+  const [totalProgress, setTotalProgress] = useState(0);
+  const [todos, setTodos] = useState<any[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [inputValue, setInputValue] = useState("");
+  const [examScope, setExamScope] = useState("");
+  const [showModals, setShowModals] = useState({
+    chat: false,
+    plan: false,
+    scope: false,
+    recycle: false,
+  });
+  const [aiLoading, setAiLoading] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+
+  // tRPC mutations
+  const generatePlanMutation = trpc.ai.generate.useMutation();
+  
+  // Streaming hook
+  const { stream, streamingText: currentStreamingText, isStreaming: currentIsStreaming, reset: resetStreaming } = useStreamingAI();
+
+  // Load storage from localStorage
   useEffect(() => {
-    const today = new Date().toISOString().split("T")[0];
-    setPlanDate(today);
+    const saved = localStorage.getItem("gentodo_storage");
+    if (saved) {
+      try {
+        setStorage(JSON.parse(saved));
+      } catch (e) {
+        console.error("加载存储失败", e);
+      }
+    }
+
+    // Format date
+    const now = new Date();
+    const options: Intl.DateTimeFormatOptions = {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      weekday: "long",
+    };
+    setCurrentDate(now.toLocaleDateString("zh-CN", options));
   }, []);
 
-  // Handle modal open
-  const handleOpenModal = () => {
-    setIsModalOpen(true);
-    setCurrentStep(1);
-    setAiContent("");
-    setModifyInput("");
+  // Save storage to localStorage
+  const saveStorage = (newStorage: any) => {
+    setStorage(newStorage);
+    localStorage.setItem("gentodo_storage", JSON.stringify(newStorage));
   };
 
-  // Handle modal close
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setCurrentStep(1);
-    setAiContent("");
-    setModifyInput("");
-    setEditingTaskId(null);
+  const openModal = (modalId: string) => {
+    setShowModals((prev) => ({ ...prev, [modalId]: true }));
   };
 
-  // Handle random target
-  const handleRandomTarget = () => {
-    const targets = [
-      "完成数学第5章习题",
-      "复习英语单词100个",
-      "阅读历史教材第3节",
-      "完成物理实验报告",
-      "预习化学新章节",
-    ];
-    const randomTarget = targets[Math.floor(Math.random() * targets.length)];
-    setTodayTarget(randomTarget);
+  const closeModal = (modalId: string) => {
+    setShowModals((prev) => ({ ...prev, [modalId]: false }));
   };
 
-  // Handle AI generation
-  const handleAiGenerate = async () => {
-    if (!todayTarget.trim()) {
-      alert("请输入今日学习目标");
+  const handleGeneratePlan = async () => {
+    if (!examScope) {
+      alert("请先输入考试范围");
       return;
     }
 
-    setIsLoading(true);
-    setCurrentStep(2);
+    setAiLoading(true);
+    try {
+      const prompt = `基于以下考试范围，生成一份详细的学习计划：\n\n${examScope}\n\n请提供：\n1. 学习目标\n2. 学习阶段划分\n3. 每个阶段的重点内容\n4. 复习策略\n5. 每日学习建议`;
+
+      const result = await generatePlanMutation.mutateAsync({ prompt });
+      const plan = result.result;
+
+      const newStorage = { ...storage, totalPlan: plan };
+      saveStorage(newStorage);
+      closeModal("scope");
+      alert("学习计划已生成！");
+    } catch (error) {
+      console.error("计划生成失败:", error);
+      alert(`计划生成失败：${error instanceof Error ? error.message : "未知错误"}`);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!inputValue.trim()) return;
+
+    const userMessage = {
+      id: Date.now(),
+      content: inputValue,
+      type: "user",
+      timestamp: new Date(),
+    };
+
+    setMessages([...messages, userMessage]);
+    const userInput = inputValue;
+    setInputValue("");
+    setAiLoading(true);
+
+    setIsStreaming(true);
+    setStreamingText("");
+    const aiMessageId = Date.now() + 1;
 
     try {
-      // Simulate AI generation with streaming
-      const mockPlan = `# 今日学习计划
+      await stream(userInput, {
+        onChunk: () => {},
+        onComplete: (fullText) => {
+          setIsStreaming(false);
+          const aiMessage = {
+            id: aiMessageId,
+            content: fullText,
+            type: "ai",
+            timestamp: new Date(),
+          };
+          setMessages((prev) => {
+            const filtered = prev.filter((m) => m.id !== aiMessageId);
+            return [...filtered, aiMessage];
+          });
+          setStreamingText("");
 
-## 上午 (9:00-12:00)
-- **${todayTarget}** - 预计2小时
-  - 完成基础题目 (30分钟)
-  - 做进阶题目 (60分钟)
-  - 总结知识点 (30分钟)
-
-## 下午 (14:00-17:00)
-- 巩固上午内容 - 预计1小时
-- 完成课后练习 - 预计1.5小时
-- 预习明日内容 - 预计30分钟
-
-## 晚上 (19:00-21:00)
-- 复习笔记 - 预计1小时
-- 完成作业 - 预计1小时
-
-${planRemark ? `\n## 特殊要求\n${planRemark}` : ""}`;
-
-      // Simulate streaming effect
-      let currentText = "";
-      for (let i = 0; i < mockPlan.length; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 5));
-        currentText += mockPlan[i];
-        setAiContent(currentText);
-      }
+          const updatedStorage = {
+            ...storage,
+            chatHistory: [...(storage.chatHistory || []), userMessage, aiMessage],
+          };
+          saveStorage(updatedStorage);
+        },
+        onError: (error) => {
+          setIsStreaming(false);
+          console.error("AI生成失败:", error);
+          alert(`AI生成失败：${error.message}`);
+        },
+      });
     } catch (error) {
-      console.error("AI生成失败", error);
-      alert("AI生成失败，请重试");
-    } finally {
-      setIsLoading(false);
+      setIsStreaming(false);
+      console.error("AI生成失败:", error);
+      alert(`AI生成失败：${error instanceof Error ? error.message : "未知错误"}`);
     }
   };
 
-  // Handle modify plan
-  const handleModifyPlan = async () => {
-    if (!modifyInput.trim()) {
-      return;
-    }
+  const navItems = [
+    { id: "dashboard", label: "首页", icon: HomeIcon },
+    { id: "todo-list", label: "待办", icon: CheckSquare2 },
+    { id: "ai-editor", label: "AI管理", icon: Sparkles },
+    { id: "settings", label: "设置", icon: SettingsIcon },
+  ];
 
-    setIsLoading(true);
-    try {
-      // Simulate AI modification
-      const modifiedPlan = `${aiContent}\n\n---\n\n## 根据您的建议进行了调整：\n${modifyInput}`;
-      setAiContent(modifiedPlan);
-      setModifyInput("");
-    } catch (error) {
-      console.error("修改计划失败", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Handle task long press
-  const handleTaskMouseDown = (taskId: string, taskContent: string) => {
-    setEditTaskContent(taskContent);
-    longPressTimerRef.current = setTimeout(() => {
-      setLongPressTaskId(taskId);
-      setEditingTaskId(taskId);
-    }, 800);
-  };
-
-  const handleTaskMouseUp = () => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-    }
-  };
-
-  // Handle save edit
-  const handleSaveEdit = () => {
-    // Save edited task
-    setEditingTaskId(null);
-    setLongPressTaskId(null);
-  };
-
-  // Handle cancel edit
-  const handleCancelEdit = () => {
-    setEditingTaskId(null);
-    setLongPressTaskId(null);
-  };
-
-  // Handle next step
-  const handleNextStep = () => {
-    if (currentStep === 1) {
-      if (!todayTarget.trim()) {
-        alert("请输入今日学习目标");
-        return;
-      }
-      handleAiGenerate();
-    } else if (currentStep === 2) {
-      handleCloseModal();
-    }
-  };
-
-  // Handle previous step
-  const handlePrevStep = () => {
-    if (currentStep === 2) {
-      setCurrentStep(1);
-      setAiContent("");
-    }
-  };
+  const hasPlan = !!storage.totalPlan;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
-      {/* 主页内容 */}
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-4xl font-bold text-slate-900 mb-2">GenToDo</h1>
-            <p className="text-slate-500">
-              {new Date().toLocaleDateString("zh-CN", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-                weekday: "long",
-              })}
-            </p>
-          </div>
-          <button
-            onClick={handleOpenModal}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-medium hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl"
-          >
-            <Sparkles size={20} />
-            一键生成计划
-          </button>
-        </div>
-
-        {/* 统计卡片 */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-white rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between">
+    <div className="flex flex-col h-screen max-w-6xl mx-auto relative bg-gray-50 overflow-hidden">
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto pb-24 px-4 md:px-6 pt-8">
+        {/* Dashboard Page */}
+        {currentPage === "dashboard" && (
+          <div className="animate-fadeIn">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
               <div>
-                <p className="text-slate-500 text-sm mb-2">今日完成</p>
-                <p className="text-3xl font-bold text-slate-900">0%</p>
+                <h1 className="text-[clamp(1.8rem,4vw,2.5rem)] font-bold text-blue-600 mb-1">
+                  GenToDo
+                </h1>
+                <p className="text-gray-400">{currentDate}</p>
               </div>
-              <Calendar className="text-blue-600" size={32} />
+              <div className="mt-4 md:mt-0">
+                <span
+                  className={`rounded-full px-4 py-2 font-medium text-sm ${
+                    hasPlan
+                      ? "bg-blue-100 text-blue-600"
+                      : "bg-gray-100 text-gray-400"
+                  }`}
+                >
+                  {hasPlan ? "学习计划进行中" : "未配置学习计划"}
+                </span>
+              </div>
             </div>
-          </div>
-          <div className="bg-white rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between">
+
+            {!hasPlan ? (
+              <div className="bg-white rounded-2xl shadow-sm p-6 mb-8 hover:shadow-md transition-all">
+                <div className="flex flex-col items-center text-center">
+                  <Sparkles className="w-12 h-12 text-blue-600 mb-4" />
+                  <h3 className="text-xl font-bold mb-2">一键生成今日学习计划</h3>
+                  <p className="text-gray-500 mb-6">
+                    AI将根据你的总计划、学习历史，自动为你生成今日最优ToDo清单
+                  </p>
+                  <button
+                    onClick={() => openModal("scope")}
+                    className="bg-blue-600 text-white rounded-full shadow-sm py-3 px-8 font-medium hover:shadow-md hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2"
+                  >
+                    <Zap className="w-5 h-5" />
+                    生成今日ToDo
+                  </button>
+                </div>
+              </div>
+            ) : (
               <div>
-                <p className="text-slate-500 text-sm mb-2">总体进度</p>
-                <p className="text-3xl font-bold text-slate-900">0%</p>
-              </div>
-              <Target className="text-blue-600" size={32} />
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-500 text-sm mb-2">待办任务</p>
-                <p className="text-3xl font-bold text-slate-900">0</p>
-              </div>
-              <FileText className="text-blue-600" size={32} />
-            </div>
-          </div>
-        </div>
-
-        {/* 主要内容区 */}
-        <div className="bg-white rounded-2xl p-8 shadow-sm">
-          <div className="flex flex-col items-center justify-center py-16 gap-4">
-            <Sparkles size={48} className="text-blue-600" />
-            <h2 className="text-2xl font-bold text-slate-900">
-              一键生成今日学习计划
-            </h2>
-            <p className="text-slate-500 text-center max-w-md">
-              AI 将根据你的总计划、学习目标、自动为你生成今最优化的学习清单
-            </p>
-            <button
-              onClick={handleOpenModal}
-              className="mt-4 px-8 py-3 bg-blue-600 text-white rounded-2xl font-medium hover:bg-blue-700 transition-all"
-            >
-              生成今日 ToDo
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 模态框 */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-            {/* 头部 */}
-            <div className="flex items-center justify-between px-7 py-6 border-b border-slate-200">
-              <h2 className="text-xl font-semibold text-slate-900 flex items-center gap-3">
-                <ListChecks size={24} className="text-blue-600" />
-                每日学习计划生成
-              </h2>
-              <button
-                onClick={handleCloseModal}
-                className="w-9 h-9 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-600 transition-all"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* 步骤进度条 */}
-            <div className="flex gap-3 px-7 py-5">
-              <div className="flex-1 h-1 rounded-full bg-slate-200 overflow-hidden">
-                <div
-                  className="h-full bg-blue-600 transition-all duration-500"
-                  style={{ width: currentStep === 1 ? "100%" : "100%" }}
-                />
-              </div>
-              <div className="flex-1 h-1 rounded-full bg-slate-200 overflow-hidden">
-                <div
-                  className="h-full bg-blue-600 transition-all duration-500"
-                  style={{ width: currentStep === 2 ? "100%" : "0%" }}
-                />
-              </div>
-            </div>
-
-            {/* 内容区 */}
-            <div className="flex-1 overflow-y-auto px-7 py-6">
-              {/* 步骤1：基础信息 */}
-              {currentStep === 1 && (
-                <div className="space-y-5 animate-in fade-in duration-300">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-900 mb-2 flex items-center gap-2">
-                      <Calendar size={16} />
-                      计划日期
-                    </label>
-                    <input
-                      type="date"
-                      value={planDate}
-                      onChange={(e) => setPlanDate(e.target.value)}
-                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 focus:border-blue-600 focus:bg-white focus:ring-3 focus:ring-blue-100 outline-none transition-all"
-                    />
+                <div className="bg-blue-600 text-white rounded-2xl shadow-sm p-6 mb-8 hover:shadow-md transition-all">
+                  <div className="flex items-center mb-2">
+                    <Target className="w-5 h-5 mr-2" />
+                    <h3 className="font-semibold text-lg">今日核心聚焦目标</h3>
                   </div>
+                  <p className="text-white/90 text-xl font-medium">
+                    {storage.totalPlan ? String(storage.totalPlan).slice(0, 100) : "暂无目标"}
+                  </p>
+                </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-slate-900 mb-2 flex items-center gap-2">
-                      <Target size={16} />
-                      今日学习目标
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={todayTarget}
-                        onChange={(e) => setTodayTarget(e.target.value)}
-                        placeholder="请输入今日核心学习目标，可点击右侧按钮从总计划库随机获取"
-                        className="w-full px-4 py-3 pr-12 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:border-blue-600 focus:bg-white focus:ring-3 focus:ring-blue-100 outline-none transition-all"
-                      />
-                      <button
-                        onClick={handleRandomTarget}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all"
-                        title="从总计划库随机获取"
-                      >
-                        <Shuffle size={18} />
-                      </button>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                  <div className="bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all">
+                    <h3 className="font-semibold text-lg mb-4">当日任务完成率</h3>
+                    <div className="flex items-center justify-center">
+                      <div className="relative w-48 h-48 flex items-center justify-center">
+                        <svg className="w-full h-full" viewBox="0 0 100 100">
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r="45"
+                            fill="none"
+                            stroke="#E8F3FF"
+                            strokeWidth="8"
+                            strokeLinecap="round"
+                          />
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r="45"
+                            fill="none"
+                            stroke="#165DFF"
+                            strokeWidth="8"
+                            strokeLinecap="round"
+                            strokeDasharray={`${282.74 * (todayProgress / 100)} 282.74`}
+                            transform="rotate(-90 50 50)"
+                            className="transition-all duration-500"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <span className="text-4xl font-bold text-blue-600">
+                            {todayProgress}%
+                          </span>
+                          <span className="text-gray-400 text-sm">已完成 / 总任务</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-slate-900 mb-2 flex items-center gap-2">
-                      <FileText size={16} />
-                      备注信息（选填）
-                    </label>
-                    <textarea
-                      value={planRemark}
-                      onChange={(e) => setPlanRemark(e.target.value)}
-                      placeholder="可输入补充说明、学习要求、注意事项等内容"
-                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:border-blue-600 focus:bg-white focus:ring-3 focus:ring-blue-100 outline-none transition-all resize-vertical min-h-20"
-                    />
+                  <div className="bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all">
+                    <h3 className="font-semibold text-lg mb-4">整体学习计划进度</h3>
+                    <div className="flex flex-col h-full justify-center">
+                      <div className="mb-6">
+                        <div className="flex justify-between mb-2">
+                          <span className="font-medium">总进度完成度</span>
+                          <span className="text-blue-600 font-bold">{totalProgress}%</span>
+                        </div>
+                        <div className="w-full h-4 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-blue-600 rounded-full transition-all duration-500"
+                            style={{ width: `${totalProgress}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <p className="text-gray-400 text-sm mb-1">开始日期</p>
+                          <p className="font-semibold">-</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <p className="text-gray-400 text-sm mb-1">截止日期</p>
+                          <p className="font-semibold">-</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              )}
 
-              {/* 步骤2：AI生成与修改 */}
-              {currentStep === 2 && (
-                <div className="space-y-5 animate-in fade-in duration-300">
-                  {/* AI对话修改区 */}
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={modifyInput}
-                      onChange={(e) => setModifyInput(e.target.value)}
-                      onKeyPress={(e) => {
-                        if (e.key === "Enter") {
-                          handleModifyPlan();
-                        }
-                      }}
-                      placeholder="输入修改指令，AI将为你调整计划，例如：增加2道数学练习题、调整任务优先级、拆分复杂任务"
-                      className="flex-1 px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:border-blue-600 focus:bg-white focus:ring-3 focus:ring-blue-100 outline-none transition-all"
-                    />
-                    <button
-                      onClick={handleModifyPlan}
-                      disabled={isLoading || !modifyInput.trim()}
-                      className="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                    >
-                      <Send size={18} />
+                <div className="bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-semibold text-lg">近期待办预览</h3>
+                    <button className="text-blue-600 text-sm font-medium hover:text-blue-700">
+                      查看全部
                     </button>
                   </div>
+                  <div className="text-center text-gray-400 py-8">
+                    暂无待办任务，点击上方按钮生成今日计划
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
-                  {/* AI生成内容渲染区 */}
-                  <div className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 min-h-64 max-h-96 overflow-y-auto">
-                    {isLoading && !aiContent ? (
-                      <div className="flex flex-col items-center justify-center h-64 gap-4">
-                        <div className="w-10 h-10 border-3 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
-                        <p className="text-sm text-slate-500">
-                          AI正在为你生成学习计划...
-                        </p>
-                      </div>
-                    ) : aiContent ? (
-                      <div className="prose prose-sm max-w-none">
-                        <MarkdownRenderer content={aiContent} />
-                      </div>
-                    ) : null}
+        {/* ToDo List Page */}
+        {currentPage === "todo-list" && (
+          <div className="animate-fadeIn">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+              <div>
+                <h2 className="text-[clamp(1.5rem,3vw,2rem)] font-bold text-gray-800 mb-2">
+                  ToDo 任务列表
+                </h2>
+                <p className="text-gray-500">按天管理你的学习待办任务</p>
+              </div>
+              <div className="mt-4 md:mt-0 text-lg font-semibold text-blue-600 bg-blue-50 px-5 py-2 rounded-full cursor-pointer select-none">
+                2026年05月02日
+              </div>
+            </div>
+
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+              <div className="flex bg-white rounded-full shadow-sm p-1">
+                <button className="rounded-full px-5 py-2 font-medium transition-all bg-blue-600 text-white">
+                  当日待办
+                </button>
+                <button className="rounded-full px-5 py-2 font-medium transition-all text-gray-600 hover:bg-gray-50">
+                  总清单
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <select className="w-auto bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all">
+                  <option>全部日期</option>
+                  <option>今日</option>
+                  <option>未来7天</option>
+                  <option>已过期</option>
+                </select>
+                <select className="w-auto bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all">
+                  <option>全部状态</option>
+                  <option>未完成</option>
+                  <option>已完成</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
+                <CheckSquare2 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-400">暂无待办任务</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* AI Editor Page */}
+        {currentPage === "ai-editor" && (
+          <div className="animate-fadeIn">
+            <div className="mb-8">
+              <h2 className="text-[clamp(1.5rem,3vw,2rem)] font-bold text-gray-800 mb-2">
+                AI 学习计划管理
+              </h2>
+              <p className="text-gray-500">管理你的学习计划、对话记录、考试范围与回收站</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Chat Card */}
+              <button
+                onClick={() => openModal("chat")}
+                className="bg-gradient-to-br from-blue-50 to-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all text-center group"
+              >
+                <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mb-4 mx-auto group-hover:scale-110 transition-transform">
+                  <MessageSquare className="w-7 h-7 text-blue-600" />
+                </div>
+                <h3 className="font-bold text-lg mb-2">AI对话</h3>
+                <p className="text-sm text-gray-500">与AI沟通调整计划</p>
+                <span className="mt-3 inline-block text-xs bg-blue-100 text-blue-600 px-3 py-1 rounded-full">
+                  {storage.chatHistory.length}条记录
+                </span>
+              </button>
+
+              {/* Plan Card */}
+              <button
+                onClick={() => openModal("plan")}
+                className="bg-gradient-to-br from-cyan-50 to-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all text-center group"
+              >
+                <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mb-4 mx-auto group-hover:scale-110 transition-transform">
+                  <BookOpen className="w-7 h-7 text-emerald-500" />
+                </div>
+                <h3 className="font-bold text-lg mb-2">总计划表</h3>
+                <p className="text-sm text-gray-500">查看编辑总学习计划</p>
+                <span className="mt-3 inline-block text-xs bg-emerald-100 text-emerald-500 px-3 py-1 rounded-full">
+                  {hasPlan ? "已配置" : "未配置"}
+                </span>
+              </button>
+
+              {/* Scope Card */}
+              <button
+                onClick={() => openModal("scope")}
+                className="bg-gradient-to-br from-orange-50 to-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all text-center group"
+              >
+                <div className="w-14 h-14 bg-orange-100 rounded-full flex items-center justify-center mb-4 mx-auto group-hover:scale-110 transition-transform">
+                  <FileText className="w-7 h-7 text-orange-500" />
+                </div>
+                <h3 className="font-bold text-lg mb-2">考试范围</h3>
+                <p className="text-sm text-gray-500">配置考试范围与PDF</p>
+                <span className="mt-3 inline-block text-xs bg-orange-100 text-orange-500 px-3 py-1 rounded-full">
+                  {storage.examScope ? "已配置" : "未配置"}
+                </span>
+              </button>
+
+              {/* Recycle Card */}
+              <button
+                onClick={() => openModal("recycle")}
+                className="bg-gradient-to-br from-red-50 to-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all text-center group"
+              >
+                <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mb-4 mx-auto group-hover:scale-110 transition-transform">
+                  <Trash2 className="w-7 h-7 text-red-500" />
+                </div>
+                <h3 className="font-bold text-lg mb-2">回收站</h3>
+                <p className="text-sm text-gray-500">恢复或彻底删除记录</p>
+                <span className="mt-3 inline-block text-xs bg-red-100 text-red-500 px-3 py-1 rounded-full">
+                  {storage.recycleBin?.length || 0}条记录
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Settings Page */}
+        {currentPage === "settings" && (
+          <div className="animate-fadeIn">
+            <div className="mb-8">
+              <h2 className="text-[clamp(1.5rem,3vw,2rem)] font-bold text-gray-800 mb-2">
+                系统设置
+              </h2>
+              <p className="text-gray-500">配置你的考试范围，生成标准化总学习计划</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6">
+              <div className="bg-white rounded-2xl shadow-sm p-6">
+                <h3 className="font-semibold text-lg mb-4 flex items-center">
+                  <FileText className="w-5 h-5 mr-2 text-blue-600" />
+                  考试范围配置
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">考试范围详情</label>
+                    <textarea
+                      className="w-full bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all min-h-[180px] resize-none"
+                      placeholder="请输入你的考试信息..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">上传考试范围PDF（可选）</label>
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      className="w-full bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all"
+                    />
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button className="bg-blue-600 text-white rounded-full py-3 px-8 font-medium hover:bg-blue-700 transition-all flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      提交生成复习计划
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm p-6">
+                <h3 className="font-semibold text-lg mb-4 flex items-center">
+                  <SettingsIcon className="w-5 h-5 mr-2 text-blue-600" />
+                  系统配置
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">后端API基础地址</label>
+                    <input
+                      type="text"
+                      className="w-full bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all"
+                      placeholder="请输入API基础地址"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm p-6">
+                <h3 className="font-semibold text-lg mb-4 flex items-center">
+                  <Database className="w-5 h-5 mr-2 text-blue-600" />
+                  数据管理
+                </h3>
+                <div className="space-y-3">
+                  <button className="w-full bg-gray-100 text-gray-700 rounded-full py-3 px-6 font-medium hover:bg-gray-200 transition-all text-left flex items-center">
+                    <Download className="w-4 h-4 mr-2" />
+                    一键导出所有数据
+                  </button>
+                  <button className="w-full bg-gray-100 text-red-600 rounded-full py-3 px-6 font-medium hover:bg-red-50 transition-all text-left flex items-center">
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    清空所有本地数据
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-gray-100 rounded-2xl p-4 text-center text-sm text-gray-500">
+                <p>产品名称：GenToDo | 版本号：v2.0.0 | © 2026 GenToDo 保留所有权利</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Modals */}
+      {showModals.chat && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl w-full max-w-2xl h-[80vh] flex flex-col animate-slideUp">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h3 className="text-xl font-bold">AI对话记录</h3>
+              <button
+                onClick={() => closeModal("chat")}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {messages.length === 0 ? (
+                <div className="text-center text-gray-400 py-8">暂无对话记录</div>
+              ) : (
+                messages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-lg px-4 py-2 rounded-2xl ${
+                        msg.type === "user"
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-100 text-gray-800"
+                      }`}
+                    >
+                      {msg.type === "user" ? (
+                        msg.content
+                      ) : (
+                        <div className="text-sm">
+                          <MarkdownRenderer content={msg.content} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+              {isStreaming && streamingText && (
+                <div className="flex justify-start">
+                  <div className="max-w-lg bg-gray-100 text-gray-800 px-4 py-2 rounded-2xl">
+                    <div className="text-sm">
+                      <MarkdownRenderer content={streamingText} />
+                    </div>
+                  </div>
+                </div>
+              )}
+              {isStreaming && !streamingText && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-2xl">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-gray-600 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+                      <div className="w-2 h-2 bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}></div>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
-
-            {/* 底部按钮 */}
-            <div className="flex items-center justify-between px-7 py-6 border-t border-slate-200 gap-3">
-              {currentStep === 2 && (
-                <button
-                  onClick={handlePrevStep}
-                  className="flex items-center gap-2 px-6 py-2 rounded-2xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
-                >
-                  <ChevronLeft size={18} />
-                  上一步
-                </button>
-              )}
-              <div className="flex-1" />
-              {currentStep === 1 && (
-                <button
-                  onClick={handleAiGenerate}
-                  disabled={!todayTarget.trim()}
-                  className="flex items-center gap-2 px-6 py-2 rounded-2xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                >
-                  <Sparkles size={18} />
-                  用AI生成计划
-                </button>
-              )}
+            <div className="p-6 border-t flex gap-2">
+              <input
+                type="text"
+                className="flex-1 bg-gray-50 rounded-full px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all"
+                placeholder="输入你的调整需求..."
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && !aiLoading) {
+                    handleSendMessage();
+                  }
+                }}
+                disabled={aiLoading}
+              />
               <button
-                onClick={handleNextStep}
-                disabled={isLoading}
-                className="flex items-center gap-2 px-6 py-2 rounded-2xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                onClick={handleSendMessage}
+                disabled={aiLoading}
+                className="bg-blue-600 text-white rounded-full p-3 hover:bg-blue-700 transition-all disabled:opacity-50"
               >
-                {currentStep === 1 ? "下一步" : "完成"}
-                {currentStep === 1 && <ChevronRight size={18} />}
+                发送
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 编辑任务弹窗 */}
-      {editingTaskId && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">
-              编辑学习任务
-            </h3>
-            <textarea
-              value={editTaskContent}
-              onChange={(e) => setEditTaskContent(e.target.value)}
-              rows={4}
-              placeholder="修改任务内容、预计耗时、优先级等信息"
-              className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:border-blue-600 focus:bg-white focus:ring-3 focus:ring-blue-100 outline-none transition-all resize-none"
-            />
-            <div className="flex items-center justify-end gap-3 mt-6">
+      {showModals.plan && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl w-full max-w-3xl h-[80vh] flex flex-col animate-slideUp">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h3 className="text-xl font-bold">总学习计划</h3>
               <button
-                onClick={handleCancelEdit}
-                className="px-6 py-2 rounded-2xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
+                onClick={() => closeModal("plan")}
+                className="text-gray-400 hover:text-gray-600"
               >
-                取消
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {storage.totalPlan ? (
+                <MarkdownRenderer content={storage.totalPlan} className="prose prose-sm" />
+              ) : (
+                <div className="text-center text-gray-400 py-12">
+                  <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <p>暂无总学习计划，去配置考试范围生成计划吧</p>
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t flex justify-end gap-3">
+              <button className="bg-gray-100 text-gray-700 rounded-full py-3 px-6 font-medium hover:bg-gray-200 transition-all">
+                AI优化计划
               </button>
               <button
-                onClick={handleSaveEdit}
-                className="px-6 py-2 rounded-2xl bg-blue-600 text-white hover:bg-blue-700 transition-all"
+                onClick={() => closeModal("plan")}
+                className="bg-blue-600 text-white rounded-full py-3 px-6 font-medium hover:bg-blue-700 transition-all"
               >
-                保存修改
+                完成
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {showModals.scope && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl w-full max-w-2xl h-[80vh] flex flex-col animate-slideUp">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h3 className="text-xl font-bold">考试范围配置</h3>
+              <button
+                onClick={() => closeModal("scope")}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-1 block">考试范围文本</label>
+                  <textarea
+                    value={examScope}
+                    onChange={(e) => setExamScope(e.target.value)}
+                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all min-h-[200px] resize-none"
+                    placeholder="请输入考试范围..."
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">上传PDF</label>
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    className="w-full bg-gray-50 rounded-2xl px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t flex justify-end">
+              <button
+                onClick={handleGeneratePlan}
+                disabled={aiLoading}
+                className="bg-blue-600 text-white rounded-full py-3 px-6 font-medium hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {aiLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    生成中...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    AI生成计划
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showModals.recycle && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl w-full max-w-2xl h-[80vh] flex flex-col animate-slideUp">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h3 className="text-xl font-bold">回收站</h3>
+              <button
+                onClick={() => closeModal("recycle")}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="text-center text-gray-400 py-12">
+                <Trash2 className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                <p>回收站为空</p>
+              </div>
+            </div>
+            <div className="p-6 border-t flex justify-end">
+              <button className="text-red-600 rounded-full py-3 px-6 font-medium hover:bg-red-50 transition-all">
+                清空回收站
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 max-w-6xl mx-auto w-full z-40">
+        <div className="flex justify-around items-center h-20 px-4">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setCurrentPage(item.id)}
+                className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+                  currentPage === item.id
+                    ? "text-blue-600 bg-blue-50"
+                    : "text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <Icon className="w-6 h-6" />
+                <span className="text-xs font-medium">{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
