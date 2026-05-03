@@ -43,14 +43,7 @@ export default function Home() {
     plan: false,
     scope: false,
     recycle: false,
-    todoComposer: false,
   });
-  const [composerTab, setComposerTab] = useState<"ai" | "manual">("ai");
-  const [manualMarkdown, setManualMarkdown] = useState("");
-  const [generatedMarkdown, setGeneratedMarkdown] = useState("");
-  const [selectedPlanId, setSelectedPlanId] = useState("");
-  const [newPlanName, setNewPlanName] = useState("");
-  const [newPlanRange, setNewPlanRange] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -118,18 +111,13 @@ export default function Home() {
       alert("请先输入考试范围");
       return;
     }
-    
+
     setAiLoading(true);
     try {
-      const selectedPlan = (storage.planList || []).find((p: any) => p.id === selectedPlanId);
-      const prompt = `基于以下考试范围，生成一份详细的学习计划：\n\n${examScope}\n\n${
-        selectedPlan ? `参考总计划（Markdown）：\n${selectedPlan.content}\n\n` : ""
-      }请提供：\n1. 学习目标\n2. 学习阶段划分\n3. 每个阶段的重点内容\n4. 复习策略\n5. 每日学习建议`;
+      const prompt = `基于以下考试范围，生成一份详细的学习计划：\n\n${examScope}\n\n请提供：\n1. 学习目标\n2. 学习阶段划分\n3. 每个阶段的重点内容\n4. 复习策略\n5. 每日学习建议`;
 
       const result = await generatePlanMutation.mutateAsync({ prompt });
       const plan = result.result;
-      setGeneratedMarkdown(plan);
-      alert("AI 计划已生成，点击「应用到今日待办」即可导入列表。");
 
       const todayKey = getTodayKey();
       const generatedTodos = extractTodosFromPlan(plan);
@@ -153,73 +141,6 @@ export default function Home() {
       setAiLoading(false);
     }
   };
-
-  const applyMarkdownToTodayTodos = (markdown: string) => {
-    const todayKey = getTodayKey();
-    const generatedTodos = extractTodosFromPlan(markdown);
-    const newStorage = {
-      ...storage,
-      examScope,
-      totalPlan: markdown,
-      todoHistory: {
-        ...(storage.todoHistory || {}),
-        [todayKey]: generatedTodos,
-      },
-    };
-    saveStorage(newStorage);
-    setTodos(generatedTodos);
-    setManualMarkdown("");
-    setGeneratedMarkdown("");
-    closeModal("scope");
-    closeModal("todoComposer");
-    alert(`已应用 ${generatedTodos.length} 条待办到今日列表`);
-  };
-
-  const handleApplyAiPlan = () => {
-    if (!generatedMarkdown.trim()) {
-      alert("请先生成 AI 计划");
-      return;
-    }
-    applyMarkdownToTodayTodos(generatedMarkdown);
-  };
-
-  const handleApplyManualMarkdown = () => {
-    if (!manualMarkdown.trim()) {
-      alert("请先输入 Markdown");
-      return;
-    }
-    applyMarkdownToTodayTodos(manualMarkdown);
-  };
-
-  const handleOpenTodoComposer = () => {
-    setComposerTab("ai");
-    openModal("todoComposer");
-  };
-
-  const handleOpenScopeModal = () => {
-    setComposerTab("ai");
-    openModal("scope");
-  };
-
-  const handleCreateMasterPlan = async () => {
-    if (!newPlanName.trim() || !newPlanRange.trim()) return alert("请填写计划名称和范围");
-    const prompt = `根据以下学习范围生成总计划（markdown列表）:\n${newPlanRange}`;
-    setAiLoading(true);
-    try {
-      const result = await generatePlanMutation.mutateAsync({ prompt });
-      const content = result.result;
-      const plan = { id: String(Date.now()), name: newPlanName.trim(), content, time: new Date().toISOString().slice(0, 10) };
-      const planList = [plan, ...(storage.planList || [])];
-      const nextStorage = { ...storage, planList, totalPlan: content };
-      saveStorage(nextStorage);
-      setSelectedPlanId(plan.id);
-      setNewPlanName("");
-      setNewPlanRange("");
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
 
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
@@ -331,7 +252,6 @@ export default function Home() {
                     AI将根据你的总计划、学习历史，自动为你生成今日最优ToDo清单
                   </p>
                   <button
-                    onClick={handleOpenScopeModal}
                     onClick={() => openModal("scope")}
                     className="bg-blue-600 text-white rounded-[999px] shadow-sm py-3 px-8 font-medium hover:shadow-md hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2"
                   >
@@ -490,12 +410,6 @@ export default function Home() {
                 ))
               )}
             </div>
-            <button
-              onClick={handleOpenTodoComposer}
-              className="fixed bottom-24 right-6 w-14 h-14 bg-blue-600 text-white rounded-[999px] shadow-lg hover:bg-blue-700 transition-all flex items-center justify-center text-3xl leading-none"
-            >
-              +
-            </button>
           </div>
         )}
 
@@ -758,34 +672,14 @@ export default function Home() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
-              <div className="space-y-4">
-                <div className="bg-gray-50 rounded-[2rem] p-4 border border-gray-100">
-                  <h4 className="font-semibold mb-3">总计划表列表</h4>
-                  {(storage.planList || []).length === 0 ? (
-                    <p className="text-sm text-gray-400">暂无总计划</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {(storage.planList || []).map((plan: any) => (
-                        <button key={plan.id} onClick={() => setSelectedPlanId(plan.id)} className={`w-full text-left p-3 rounded-[1.25rem] border ${selectedPlanId === plan.id ? "border-blue-600 bg-blue-50" : "border-gray-200 bg-white"}`}>
-                          <p className="font-medium">{plan.name}</p>
-                          <p className="text-xs text-gray-500">{plan.time}</p>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+              {storage.totalPlan ? (
+                <MarkdownRenderer content={storage.totalPlan} className="prose prose-sm" />
+              ) : (
+                <div className="text-center text-gray-400 py-12">
+                  <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <p>暂无总学习计划，去配置考试范围生成计划吧</p>
                 </div>
-                {(storage.planList || []).find((p: any) => p.id === selectedPlanId)?.content || storage.totalPlan ? (
-                  <MarkdownRenderer content={(storage.planList || []).find((p: any) => p.id === selectedPlanId)?.content || storage.totalPlan} className="prose prose-sm" />
-                ) : (
-                  <div className="text-center text-gray-400 py-12">暂无可查看计划</div>
-                )}
-                <div className="bg-white border border-gray-100 rounded-[2rem] p-4 space-y-3">
-                  <h4 className="font-semibold">新建总计划</h4>
-                  <input value={newPlanName} onChange={(e) => setNewPlanName(e.target.value)} className="w-full bg-gray-50 rounded-[1.25rem] px-4 py-3" placeholder="计划名称" />
-                  <textarea value={newPlanRange} onChange={(e) => setNewPlanRange(e.target.value)} className="w-full bg-gray-50 rounded-[1.25rem] px-4 py-3 min-h-[100px]" placeholder="考试范围 / 学习范围" />
-                  <button onClick={handleCreateMasterPlan} disabled={aiLoading} className="bg-blue-600 text-white rounded-[999px] py-2 px-5">{aiLoading ? "生成中..." : "AI生成总计划"}</button>
-                </div>
-              </div>
+              )}
             </div>
             <div className="p-6 border-t flex justify-end gap-3">
               <button className="bg-gray-100 text-gray-700 rounded-[999px] py-3 px-6 font-medium hover:bg-gray-200 transition-all">
@@ -815,11 +709,6 @@ export default function Home() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
-              <div className="mb-4 flex bg-gray-100 rounded-[999px] p-1">
-                <button onClick={() => setComposerTab("ai")} className={`flex-1 py-2 rounded-[999px] ${composerTab === "ai" ? "bg-white shadow text-blue-600" : "text-gray-500"}`}>AI计划生成</button>
-                <button onClick={() => setComposerTab("manual")} className={`flex-1 py-2 rounded-[999px] ${composerTab === "manual" ? "bg-white shadow text-blue-600" : "text-gray-500"}`}>手动输入</button>
-              </div>
-              {composerTab === "ai" ? (
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium mb-1 block">考试范围文本</label>
@@ -838,69 +727,8 @@ export default function Home() {
                     className="w-full bg-gray-50 rounded-[2rem] px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all"
                   />
                 </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block">参考总计划（可选）</label>
-                  <select value={selectedPlanId} onChange={(e) => setSelectedPlanId(e.target.value)} className="w-full bg-gray-50 rounded-[2rem] px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600">
-                    <option value="">不参考总计划</option>
-                    {(storage.planList || []).map((plan: any) => (
-                      <option key={plan.id} value={plan.id}>{plan.name}</option>
-                    ))}
-                  </select>
-                </div>
-                {generatedMarkdown && (
-                  <div className="bg-gray-50 rounded-[2rem] p-4">
-                    <p className="text-sm text-gray-500 mb-2">AI 生成预览（Markdown）</p>
-                    <pre className="text-xs whitespace-pre-wrap text-gray-700 max-h-48 overflow-y-auto">{generatedMarkdown}</pre>
-                  </div>
-                )}
               </div>
-              ) : (
-                <div className="space-y-3">
-                  <label className="text-sm font-medium mb-1 block">Markdown 输入</label>
-                  <textarea value={manualMarkdown} onChange={(e) => setManualMarkdown(e.target.value)} className="w-full bg-gray-50 rounded-[2rem] px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all min-h-[280px] resize-none" placeholder="- [ ] 复习代数第一章\n- 完成几何练习 10 题" />
-                </div>
-              )}
             </div>
-            <div className="p-6 border-t flex justify-end gap-3">
-              {composerTab === "ai" ? (
-                <>
-                  <button onClick={handleGeneratePlan} disabled={aiLoading} className="bg-gray-100 text-gray-700 rounded-[999px] py-3 px-6 font-medium hover:bg-gray-200 transition-all disabled:opacity-50">AI生成</button>
-                  <button onClick={handleApplyAiPlan} className="bg-blue-600 text-white rounded-[999px] py-3 px-6 font-medium hover:bg-blue-700 transition-all">应用到今日待办</button>
-                </>
-              ) : (
-                <button onClick={handleApplyManualMarkdown} className="bg-blue-600 text-white rounded-[999px] py-3 px-6 font-medium hover:bg-blue-700 transition-all">导入 Markdown 到待办</button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showModals.todoComposer && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white rounded-[2rem] w-full max-w-2xl h-[80vh] flex flex-col animate-slideUp">
-            <div className="flex justify-between items-center p-6 border-b">
-              <h3 className="text-xl font-bold">添加今日待办</h3>
-              <button onClick={() => closeModal("todoComposer")} className="text-gray-400 hover:text-gray-600"><X className="w-6 h-6" /></button>
-            </div>
-            <div className="p-6 overflow-y-auto">
-              <div className="mb-4 flex bg-gray-100 rounded-[999px] p-1">
-                <button onClick={() => setComposerTab("ai")} className={`flex-1 py-2 rounded-[999px] ${composerTab === "ai" ? "bg-white shadow text-blue-600" : "text-gray-500"}`}>AI计划生成</button>
-                <button onClick={() => setComposerTab("manual")} className={`flex-1 py-2 rounded-[999px] ${composerTab === "manual" ? "bg-white shadow text-blue-600" : "text-gray-500"}`}>手动输入</button>
-              </div>
-              {composerTab === "ai" ? (
-                <div className="space-y-4">
-                  <textarea value={examScope} onChange={(e) => setExamScope(e.target.value)} className="w-full bg-gray-50 rounded-[2rem] px-4 py-3 min-h-[160px]" placeholder="请输入考试范围..." />
-                  <div className="flex gap-2 justify-end">
-                    <button onClick={handleGeneratePlan} disabled={aiLoading} className="bg-gray-100 text-gray-700 rounded-[999px] py-2 px-4">AI生成</button>
-                    <button onClick={handleApplyAiPlan} className="bg-blue-600 text-white rounded-[999px] py-2 px-4">应用</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <textarea value={manualMarkdown} onChange={(e) => setManualMarkdown(e.target.value)} className="w-full bg-gray-50 rounded-[2rem] px-4 py-3 min-h-[220px]" placeholder="- [ ] 任务1" />
-                  <div className="flex justify-end"><button onClick={handleApplyManualMarkdown} className="bg-blue-600 text-white rounded-[999px] py-2 px-4">导入</button></div>
-                </div>
-              )}
             <div className="p-6 border-t flex justify-end">
               <button
                 onClick={handleGeneratePlan}
