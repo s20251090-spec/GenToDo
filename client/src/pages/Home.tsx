@@ -101,6 +101,7 @@ export default function Home() {
   };
 
   const getTodayKey = () => selectedDate;
+  const getTodayKey = () => new Date().toISOString().slice(0, 10);
 
   const extractTodosFromPlan = (planText: string) => {
     return planText
@@ -145,6 +146,22 @@ export default function Home() {
       const plan = result.result;
       setGeneratedMarkdown(plan);
       alert("AI 计划已生成，点击「应用到今日待办」即可导入列表。");
+
+      const todayKey = getTodayKey();
+      const generatedTodos = extractTodosFromPlan(plan);
+      const newStorage = {
+        ...storage,
+        examScope,
+        totalPlan: plan,
+        todoHistory: {
+          ...(storage.todoHistory || {}),
+          [todayKey]: generatedTodos,
+        },
+      };
+      saveStorage(newStorage);
+      setTodos(generatedTodos);
+      closeModal("scope");
+      alert(`学习计划已生成，并同步了${generatedTodos.length}条今日待办！`);
     } catch (error) {
       console.error("计划生成失败:", error);
       alert(`计划生成失败：${error instanceof Error ? error.message : "未知错误"}`);
@@ -285,12 +302,15 @@ export default function Home() {
   useEffect(() => {
     const dayKey = getTodayKey();
     const todayTodos = storage?.todoHistory?.[dayKey] || [];
+    const todayKey = getTodayKey();
+    const todayTodos = storage?.todoHistory?.[todayKey] || [];
     setTodos(todayTodos);
 
     const completed = todayTodos.filter((todo: any) => todo.completed).length;
     const todayRate = todayTodos.length ? Math.round((completed / todayTodos.length) * 100) : 0;
     setTodayProgress(todayRate);
   }, [storage, selectedDate]);
+  }, [storage]);
 
   const hasPlan = !!storage.totalPlan;
 
@@ -331,6 +351,7 @@ export default function Home() {
                   </p>
                   <button
                     onClick={handleOpenScopeModal}
+                    onClick={() => openModal("scope")}
                     className="bg-blue-600 text-white rounded-[999px] shadow-sm py-3 px-8 font-medium hover:shadow-md hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2"
                   >
                     <Zap className="w-5 h-5" />
@@ -452,6 +473,8 @@ export default function Home() {
                 {showDatePicker && (
                   <input type="date" value={selectedDate} onChange={(e) => { setSelectedDate(e.target.value); setShowDatePicker(false); }} className="bg-white border border-gray-200 rounded-[999px] px-3 py-2" />
                 )}
+              <div className="mt-4 md:mt-0 text-lg font-semibold text-blue-600 bg-blue-50 px-5 py-2 rounded-[999px] cursor-pointer select-none">
+                2026年05月02日
               </div>
             </div>
 
@@ -492,6 +515,7 @@ export default function Home() {
                     <div className="text-gray-800 text-sm">
                       <MarkdownRenderer content={todo.content} />
                     </div>
+                    <p className="text-gray-800">{todo.content}</p>
                   </div>
                 ))
               )}
@@ -668,6 +692,7 @@ export default function Home() {
 
               <div className="bg-gray-100 rounded-[2rem] p-4 text-center text-sm text-gray-500">
                 <p>产品名称：GenToDo | 版本号：v5.1.0 | © 2026 GenToDo 保留所有权利</p>
+                <p>产品名称：GenToDo | 版本号：v2.0.0 | © 2026 GenToDo 保留所有权利</p>
               </div>
             </div>
           </div>
@@ -917,6 +942,24 @@ export default function Home() {
                   <div className="flex justify-end"><button onClick={handleApplyManualMarkdown} className="bg-blue-600 text-white rounded-[999px] py-2 px-4">导入</button></div>
                 </div>
               )}
+            <div className="p-6 border-t flex justify-end">
+              <button
+                onClick={handleGeneratePlan}
+                disabled={aiLoading}
+                className="bg-blue-600 text-white rounded-[999px] py-3 px-6 font-medium hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {aiLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-[999px] animate-spin"></div>
+                    生成中...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    AI生成计划
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
