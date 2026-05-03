@@ -56,6 +56,7 @@ export default function Home() {
   const [streamingText, setStreamingText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [dailyTheme, setDailyTheme] = useState("");
 
   // tRPC mutations
   const generatePlanMutation = trpc.ai.generate.useMutation();
@@ -126,8 +127,12 @@ export default function Home() {
   };
 
   const handleGeneratePlan = async () => {
-    if (!examScope) {
-      alert("请先输入考试范围");
+    if (!selectedPlanId) {
+      alert("请先选择一个总计划表，再生成每日待办。");
+      return;
+    }
+    if (!selectedDate) {
+      alert("请先选择日期，再生成每日待办。");
       return;
     }
     if (!selectedPlanId && !(storage.planList || []).length) {
@@ -138,9 +143,11 @@ export default function Home() {
     setAiLoading(true);
     try {
       const selectedPlan = (storage.planList || []).find((p: any) => p.id === selectedPlanId);
-      const prompt = `基于以下考试范围，生成一份详细的学习计划：\n\n${examScope}\n\n${
-        selectedPlan ? `参考总计划（Markdown）：\n${selectedPlan.content}\n\n` : ""
-      }请提供：\n1. 学习目标\n2. 学习阶段划分\n3. 每个阶段的重点内容\n4. 复习策略\n5. 每日学习建议`;
+      if (!selectedPlan) {
+        alert("未找到已选总计划，请重新选择。");
+        return;
+      }
+      const prompt = `你是专业的备考学习计划规划师。请仅输出Markdown无序列表任务，不要输出任何解释。\n\n(总学习计划表):\n${selectedPlan.content}\n\n(考试截止日期): ${storage.examDate || "未设置"}\n(考试核心范围): ${storage.examScope || examScope || "未设置"}\n(当日指定学习主题): ${dailyTheme || "综合复习"}\n(用户已完成历史学习任务全量记录): ${JSON.stringify(storage.learningHistory || {})}\n(计划生成日期): ${selectedDate}\n\n输出格式强制：\n- 【任务内容】 | 预计耗时：(XX分钟) | 优先级：(高/中/低)`;
 
       const result = await generatePlanMutation.mutateAsync({ prompt });
       const plan = result.result;
@@ -159,8 +166,7 @@ export default function Home() {
     const generatedTodos = extractTodosFromPlan(markdown);
     const newStorage = {
       ...storage,
-      examScope,
-      totalPlan: markdown,
+      examScope: storage.examScope || examScope,
       todoHistory: {
         ...(storage.todoHistory || {}),
         [todayKey]: generatedTodos,
@@ -668,7 +674,7 @@ export default function Home() {
               </div>
 
               <div className="bg-gray-100 rounded-[2rem] p-4 text-center text-sm text-gray-500">
-                <p>产品名称：GenToDo | 版本号：v5.1.0 | © 2026 GenToDo 保留所有权利</p>
+                <p>产品名称：GenToDo | 版本号：v6.0.0 | © 2026 GenToDo 保留所有权利</p>
               </div>
             </div>
           </div>
@@ -848,6 +854,15 @@ export default function Home() {
                   />
                 </div>
                 <div>
+                  <label className="text-sm font-medium mb-1 block">当日学习主题</label>
+                  <input
+                    value={dailyTheme}
+                    onChange={(e) => setDailyTheme(e.target.value)}
+                    className="w-full bg-gray-50 rounded-[2rem] px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all"
+                    placeholder="例如：函数专题冲刺"
+                  />
+                </div>
+                <div>
                   <label className="text-sm font-medium mb-1 block">上传PDF</label>
                   <input
                     type="file"
@@ -856,9 +871,9 @@ export default function Home() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium mb-1 block">参考总计划（可选）</label>
+                  <label className="text-sm font-medium mb-1 block">参考总计划（必选）</label>
                   <select value={selectedPlanId} onChange={(e) => setSelectedPlanId(e.target.value)} className="w-full bg-gray-50 rounded-[2rem] px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600">
-                    <option value="">不参考总计划</option>
+                    <option value="">请选择总计划</option>
                     {(storage.planList || []).map((plan: any) => (
                       <option key={plan.id} value={plan.id}>{plan.name}</option>
                     ))}
