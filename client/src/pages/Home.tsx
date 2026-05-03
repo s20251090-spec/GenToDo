@@ -135,6 +135,10 @@ export default function Home() {
       alert("请先选择日期，再生成每日待办。");
       return;
     }
+    if (!selectedPlanId && !(storage.planList || []).length) {
+      alert("请先在「AI管理 > 总学习计划」中创建总计划，再生成每日计划。");
+      return;
+    }
 
     setAiLoading(true);
     try {
