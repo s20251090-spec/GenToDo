@@ -118,7 +118,7 @@ export default function Home() {
       alert("请先输入考试范围");
       return;
     }
-
+    
     setAiLoading(true);
     try {
       const selectedPlan = (storage.planList || []).find((p: any) => p.id === selectedPlanId);
@@ -130,6 +130,22 @@ export default function Home() {
       const plan = result.result;
       setGeneratedMarkdown(plan);
       alert("AI 计划已生成，点击「应用到今日待办」即可导入列表。");
+
+      const todayKey = getTodayKey();
+      const generatedTodos = extractTodosFromPlan(plan);
+      const newStorage = {
+        ...storage,
+        examScope,
+        totalPlan: plan,
+        todoHistory: {
+          ...(storage.todoHistory || {}),
+          [todayKey]: generatedTodos,
+        },
+      };
+      saveStorage(newStorage);
+      setTodos(generatedTodos);
+      closeModal("scope");
+      alert(`学习计划已生成，并同步了${generatedTodos.length}条今日待办！`);
     } catch (error) {
       console.error("计划生成失败:", error);
       alert(`计划生成失败：${error instanceof Error ? error.message : "未知错误"}`);
@@ -316,6 +332,7 @@ export default function Home() {
                   </p>
                   <button
                     onClick={handleOpenScopeModal}
+                    onClick={() => openModal("scope")}
                     className="bg-blue-600 text-white rounded-[999px] shadow-sm py-3 px-8 font-medium hover:shadow-md hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2"
                   >
                     <Zap className="w-5 h-5" />
@@ -884,6 +901,24 @@ export default function Home() {
                   <div className="flex justify-end"><button onClick={handleApplyManualMarkdown} className="bg-blue-600 text-white rounded-[999px] py-2 px-4">导入</button></div>
                 </div>
               )}
+            <div className="p-6 border-t flex justify-end">
+              <button
+                onClick={handleGeneratePlan}
+                disabled={aiLoading}
+                className="bg-blue-600 text-white rounded-[999px] py-3 px-6 font-medium hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {aiLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-[999px] animate-spin"></div>
+                    生成中...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    AI生成计划
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
