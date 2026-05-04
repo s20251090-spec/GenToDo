@@ -57,6 +57,19 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dailyTheme, setDailyTheme] = useState("");
+  const [generationError, setGenerationError] = useState("");
+  const [aiDetailView, setAiDetailView] = useState<"grid" | "chat" | "plan" | "scope" | "recycle">("grid");
+  const [commandTemplates] = useState({
+    A: "生成总计划: {{exam_scope}} {{exam_date}}",
+    B: "每日生成: {{selected_date}} {{daily_theme}} {{master_plan}}",
+    C: "AI对话调整: {{current_todo}} {{user_instruction}}",
+  });
+  const [variables] = useState([
+    { key: "exam_scope", defaultValue: "数学:代数/几何" },
+    { key: "exam_date", defaultValue: "2026-12-01" },
+    { key: "selected_date", defaultValue: new Date().toISOString().slice(0, 10) },
+    { key: "daily_theme", defaultValue: "函数专题冲刺" },
+  ]);
 
   // tRPC mutations
   const generatePlanMutation = trpc.ai.generate.useMutation();
@@ -127,16 +140,17 @@ export default function Home() {
   };
 
   const handleGeneratePlan = async () => {
+    setGenerationError("");
     if (!selectedPlanId) {
-      alert("请先选择一个总计划表，再生成每日待办。");
+      const msg = "请先选择一个总计划表，再生成每日待办。";
+      setGenerationError(msg);
+      alert(msg);
       return;
     }
     if (!selectedDate) {
-      alert("请先选择日期，再生成每日待办。");
-      return;
-    }
-    if (!selectedPlanId && !(storage.planList || []).length) {
-      alert("请先在「AI管理 > 总学习计划」中创建总计划，再生成每日计划。");
+      const msg = "请先选择日期，再生成每日待办。";
+      setGenerationError(msg);
+      alert(msg);
       return;
     }
 
@@ -144,7 +158,9 @@ export default function Home() {
     try {
       const selectedPlan = (storage.planList || []).find((p: any) => p.id === selectedPlanId);
       if (!selectedPlan) {
-        alert("未找到已选总计划，请重新选择。");
+        const msg = "未找到已选总计划，请重新选择。";
+        setGenerationError(msg);
+        alert(msg);
         return;
       }
       const prompt = `你是专业的备考学习计划规划师。请仅输出Markdown无序列表任务，不要输出任何解释。\n\n(总学习计划表):\n${selectedPlan.content}\n\n(考试截止日期): ${storage.examDate || "未设置"}\n(考试核心范围): ${storage.examScope || examScope || "未设置"}\n(当日指定学习主题): ${dailyTheme || "综合复习"}\n(用户已完成历史学习任务全量记录): ${JSON.stringify(storage.learningHistory || {})}\n(计划生成日期): ${selectedDate}\n\n输出格式强制：\n- 【任务内容】 | 预计耗时：(XX分钟) | 优先级：(高/中/低)`;
@@ -155,7 +171,9 @@ export default function Home() {
       alert("AI 计划已生成，点击「应用到今日待办」即可导入列表。");
     } catch (error) {
       console.error("计划生成失败:", error);
-      alert(`计划生成失败：${error instanceof Error ? error.message : "未知错误"}`);
+      const msg = `计划生成失败：${error instanceof Error ? error.message : "未知错误"}`;
+      setGenerationError(msg);
+      alert(msg);
     } finally {
       setAiLoading(false);
     }
@@ -532,10 +550,11 @@ export default function Home() {
               <p className="text-gray-500">管理你的学习计划、对话记录、考试范围与回收站</p>
             </div>
 
+            {aiDetailView === "grid" && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {/* Chat Card */}
               <button
-                onClick={() => openModal("chat")}
+                onClick={() => setAiDetailView("chat")}
                 className="bg-white border border-gray-100 rounded-[2rem] shadow-sm p-6 hover:shadow-md transition-all text-center group"
               >
                 <div className="w-14 h-14 bg-blue-100 rounded-[999px] flex items-center justify-center mb-4 mx-auto group-hover:scale-110 transition-transform">
@@ -550,7 +569,7 @@ export default function Home() {
 
               {/* Plan Card */}
               <button
-                onClick={() => openModal("plan")}
+                onClick={() => setAiDetailView("plan")}
                 className="bg-white border border-gray-100 rounded-[2rem] shadow-sm p-6 hover:shadow-md transition-all text-center group"
               >
                 <div className="w-14 h-14 bg-emerald-100 rounded-[999px] flex items-center justify-center mb-4 mx-auto group-hover:scale-110 transition-transform">
@@ -565,7 +584,7 @@ export default function Home() {
 
               {/* Scope Card */}
               <button
-                onClick={() => openModal("scope")}
+                onClick={() => setAiDetailView("scope")}
                 className="bg-white border border-gray-100 rounded-[2rem] shadow-sm p-6 hover:shadow-md transition-all text-center group"
               >
                 <div className="w-14 h-14 bg-orange-100 rounded-[999px] flex items-center justify-center mb-4 mx-auto group-hover:scale-110 transition-transform">
@@ -580,7 +599,7 @@ export default function Home() {
 
               {/* Recycle Card */}
               <button
-                onClick={() => openModal("recycle")}
+                onClick={() => setAiDetailView("recycle")}
                 className="bg-white border border-gray-100 rounded-[2rem] shadow-sm p-6 hover:shadow-md transition-all text-center group"
               >
                 <div className="w-14 h-14 bg-red-100 rounded-[999px] flex items-center justify-center mb-4 mx-auto group-hover:scale-110 transition-transform">
@@ -593,6 +612,14 @@ export default function Home() {
                 </span>
               </button>
             </div>
+            )}
+            {aiDetailView !== "grid" && (
+              <div className="bg-white rounded-[2rem] p-6 border border-gray-100">
+                <button onClick={() => setAiDetailView("grid")} className="mb-4 px-4 py-2 rounded-[999px] bg-gray-100">返回模块</button>
+                <p className="text-lg font-semibold">当前详情页：{aiDetailView}</p>
+                <p className="text-sm text-gray-500 mt-2">已切换为详情页模式，可在此继续操作对应模块。</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -674,7 +701,20 @@ export default function Home() {
               </div>
 
               <div className="bg-gray-100 rounded-[2rem] p-4 text-center text-sm text-gray-500">
-                <p>产品名称：GenToDo | 版本号：v6.0.0 | © 2026 GenToDo 保留所有权利</p>
+                <p>产品名称：GenToDo | 版本号：v12.5.8 | © 2026 GenToDo1 保留所有权利</p>
+              </div>
+              <div className="bg-white rounded-[2rem] p-6 border border-gray-100">
+                <h3 className="font-semibold mb-3">命令与变量库</h3>
+                <div className="space-y-2 text-sm">
+                  <p><b>A</b>: {commandTemplates.A}</p>
+                  <p><b>B</b>: {commandTemplates.B}</p>
+                  <p><b>C</b>: {commandTemplates.C}</p>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {variables.map((v) => (
+                    <span key={v.key} className="px-3 py-1 rounded-[999px] bg-blue-50 text-blue-700 text-xs">{`{{${v.key}}}=${v.defaultValue}`}</span>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -883,6 +923,17 @@ export default function Home() {
                   <div className="bg-gray-50 rounded-[2rem] p-4">
                     <p className="text-sm text-gray-500 mb-2">AI 生成预览（Markdown）</p>
                     <pre className="text-xs whitespace-pre-wrap text-gray-700 max-h-48 overflow-y-auto">{generatedMarkdown}</pre>
+                  </div>
+                )}
+                {aiLoading && (
+                  <div className="bg-blue-50 border border-blue-100 rounded-[2rem] p-4 flex items-center gap-3">
+                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-[999px] animate-spin" />
+                    <p className="text-sm text-blue-700">AI 正在生成每日待办，请稍候...</p>
+                  </div>
+                )}
+                {generationError && (
+                  <div className="bg-red-50 border border-red-100 rounded-[2rem] p-4">
+                    <p className="text-sm text-red-700">{generationError}</p>
                   </div>
                 )}
               </div>
