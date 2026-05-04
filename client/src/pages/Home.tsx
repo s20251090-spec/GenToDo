@@ -701,7 +701,7 @@ export default function Home() {
               </div>
 
               <div className="bg-gray-100 rounded-[2rem] p-4 text-center text-sm text-gray-500">
-                <p>产品名称：GenToDo | 版本号：v12.5.7 | © 2026 GenToDo 保留所有权利</p>
+                <p>产品名称：GenToDo | 版本号：v12.5.8 | © 2026 GenToDo1 保留所有权利</p>
               </div>
               <div className="bg-white rounded-[2rem] p-6 border border-gray-100">
                 <h3 className="font-semibold mb-3">命令与变量库</h3>
