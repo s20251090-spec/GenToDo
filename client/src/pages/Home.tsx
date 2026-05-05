@@ -59,6 +59,8 @@ export default function Home() {
   const [dailyTheme, setDailyTheme] = useState("");
   const [generationError, setGenerationError] = useState("");
   const [aiDetailView, setAiDetailView] = useState<"grid" | "chat" | "plan" | "scope" | "recycle">("grid");
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(1);
   const [commandTemplates] = useState({
     A: "生成总计划: {{exam_scope}} {{exam_date}}",
     B: "每日生成: {{selected_date}} {{daily_theme}} {{master_plan}}",
@@ -80,6 +82,8 @@ export default function Home() {
   // Load storage from localStorage
   useEffect(() => {
     const saved = localStorage.getItem("gentodo_storage");
+    const seenWelcome = localStorage.getItem("gentodo_onboarding_done");
+    setShowWelcome(!seenWelcome);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -101,12 +105,7 @@ export default function Home() {
     setCurrentDate(now.toLocaleDateString("zh-CN", options));
   }, []);
 
-  useEffect(() => {
-    if (!storage?.examScope) {
-      setCurrentPage("settings");
-      alert("请先在设置页面配置考试范围后再继续。");
-    }
-  }, [storage?.examScope]);
+  useEffect(() => {}, [storage?.examScope]);
 
   // Save storage to localStorage
   const saveStorage = (newStorage: any) => {
@@ -244,6 +243,12 @@ export default function Home() {
     }
   };
 
+  const finishOnboarding = () => {
+    localStorage.setItem("gentodo_onboarding_done", "1");
+    setShowWelcome(false);
+    setCurrentPage("settings");
+  };
+
 
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
@@ -321,6 +326,24 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen max-w-6xl mx-auto relative bg-gray-50 overflow-hidden">
+      {showWelcome && (
+        <div className="fixed inset-0 z-[100] bg-white flex items-center justify-center p-6">
+          <div className="max-w-xl w-full bg-white border border-gray-100 rounded-[2rem] p-8 shadow-sm">
+            <h2 className="text-2xl font-bold mb-2">欢迎使用 GenToDo</h2>
+            <p className="text-gray-500 mb-6">AI驱动学习计划系统，首次使用建议完成4步初始化。</p>
+            <div className="space-y-2 text-sm mb-6">
+              <p className={onboardingStep >= 1 ? "text-blue-600 font-medium" : "text-gray-400"}>1. 配置考试范围</p>
+              <p className={onboardingStep >= 2 ? "text-blue-600 font-medium" : "text-gray-400"}>2. 创建总学习计划</p>
+              <p className={onboardingStep >= 3 ? "text-blue-600 font-medium" : "text-gray-400"}>3. 选择日期与主题</p>
+              <p className={onboardingStep >= 4 ? "text-blue-600 font-medium" : "text-gray-400"}>4. 生成首个每日待办</p>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setShowWelcome(false)} className="px-4 py-2 rounded-[999px] bg-gray-100">稍后</button>
+              <button onClick={finishOnboarding} className="px-4 py-2 rounded-[999px] bg-blue-600 text-white">开始使用</button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto pb-24 px-4 md:px-6 pt-8">
         {/* Dashboard Page */}
@@ -618,6 +641,12 @@ export default function Home() {
                 <button onClick={() => setAiDetailView("grid")} className="mb-4 px-4 py-2 rounded-[999px] bg-gray-100">返回模块</button>
                 <p className="text-lg font-semibold">当前详情页：{aiDetailView}</p>
                 <p className="text-sm text-gray-500 mt-2">已切换为详情页模式，可在此继续操作对应模块。</p>
+                <div className="mt-4">
+                  {aiDetailView === "chat" && <button onClick={() => openModal("chat")} className="px-4 py-2 rounded-[999px] bg-blue-600 text-white">打开AI对话详情</button>}
+                  {aiDetailView === "plan" && <button onClick={() => openModal("plan")} className="px-4 py-2 rounded-[999px] bg-blue-600 text-white">打开总计划详情</button>}
+                  {aiDetailView === "scope" && <button onClick={() => openModal("scope")} className="px-4 py-2 rounded-[999px] bg-blue-600 text-white">打开考试范围详情</button>}
+                  {aiDetailView === "recycle" && <button onClick={() => openModal("recycle")} className="px-4 py-2 rounded-[999px] bg-blue-600 text-white">打开回收站详情</button>}
+                </div>
               </div>
             )}
           </div>
@@ -646,6 +675,7 @@ export default function Home() {
                       className="w-full bg-gray-50 rounded-[2rem] px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all min-h-[180px] resize-none"
                       placeholder="请输入你的考试信息..."
                     />
+                    <p className="text-xs text-gray-400 mt-1">必填项：考试核心范围，建议包含科目与题型范围。</p>
                   </div>
 
                   <div>
@@ -663,6 +693,7 @@ export default function Home() {
                       提交生成复习计划
                     </button>
                   </div>
+                  <p className="text-xs text-emerald-600">保存后会同步到本地存储并用于AI生成。</p>
                 </div>
               </div>
 
@@ -701,7 +732,7 @@ export default function Home() {
               </div>
 
               <div className="bg-gray-100 rounded-[2rem] p-4 text-center text-sm text-gray-500">
-                <p>产品名称：GenToDo | 版本号：v12.5.8 | © 2026 GenToDo1 保留所有权利</p>
+                <p>产品名称：GenToDo | 版本号：v12.5.7 | © 2026 GenToDo 保留所有权利</p>
               </div>
               <div className="bg-white rounded-[2rem] p-6 border border-gray-100">
                 <h3 className="font-semibold mb-3">命令与变量库</h3>
