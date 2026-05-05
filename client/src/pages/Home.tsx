@@ -56,6 +56,7 @@ export default function Home() {
   const [streamingText, setStreamingText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
   const [dailyTheme, setDailyTheme] = useState("");
   const [generationError, setGenerationError] = useState("");
   const [aiDetailView, setAiDetailView] = useState<"grid" | "chat" | "plan" | "scope" | "recycle">("grid");
@@ -212,6 +213,37 @@ export default function Home() {
       return;
     }
     applyMarkdownToTodayTodos(manualMarkdown);
+  };
+
+  const handleDeleteTodo = (todoId: number) => {
+    const todayKey = getTodayKey();
+    const todayTodos = [...(storage?.todoHistory?.[todayKey] || [])];
+    const target = todayTodos.find((t: any) => t.id === todoId);
+    const filtered = todayTodos.filter((t: any) => t.id !== todoId);
+    const nextStorage = {
+      ...storage,
+      todoHistory: { ...(storage.todoHistory || {}), [todayKey]: filtered },
+      recycleBin: [
+        ...(storage.recycleBin || []),
+        ...(target ? [{ ...target, deletedAt: new Date().toISOString(), sourceDate: todayKey }] : []),
+      ],
+    };
+    saveStorage(nextStorage);
+  };
+
+  const handleRestoreRecycleItem = (itemId: number) => {
+    const item = (storage.recycleBin || []).find((r: any) => r.id === itemId);
+    if (!item) return;
+    const dateKey = item.sourceDate || getTodayKey();
+    const nextStorage = {
+      ...storage,
+      todoHistory: {
+        ...(storage.todoHistory || {}),
+        [dateKey]: [...(storage.todoHistory?.[dateKey] || []), { ...item }],
+      },
+      recycleBin: (storage.recycleBin || []).filter((r: any) => r.id !== itemId),
+    };
+    saveStorage(nextStorage);
   };
 
   const handleOpenTodoComposer = () => {
@@ -540,6 +572,7 @@ export default function Home() {
                     <div className="text-gray-800 text-sm">
                       <MarkdownRenderer content={todo.content} />
                     </div>
+                    <button onClick={() => handleDeleteTodo(todo.id)} className="ml-auto text-red-500 text-xs px-3 py-1 rounded-[999px] bg-red-50">删除</button>
                   </div>
                 ))
               )}
@@ -732,7 +765,7 @@ export default function Home() {
               </div>
 
               <div className="bg-gray-100 rounded-[2rem] p-4 text-center text-sm text-gray-500">
-                <p>产品名称：GenToDo | 版本号：v12.5.7 | © 2026 GenToDo 保留所有权利</p>
+                <p>产品名称：GenToDo | 版本号：v17.9.4 | © 2026 GenToDo 保留所有权利</p>
               </div>
               <div className="bg-white rounded-[2rem] p-6 border border-gray-100">
                 <h3 className="font-semibold mb-3">命令与变量库</h3>
@@ -743,7 +776,7 @@ export default function Home() {
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {variables.map((v) => (
-                    <span key={v.key} className="px-3 py-1 rounded-[999px] bg-blue-50 text-blue-700 text-xs">{`{{${v.key}}}=${v.defaultValue}`}</span>
+                    <button key={v.key} onClick={() => setManualMarkdown((prev) => `${prev} {{${v.key}}}`)} className="px-3 py-1 rounded-[999px] bg-blue-50 text-blue-700 text-xs">{`{{${v.key}}}=${v.defaultValue}`}</button>
                   ))}
                 </div>
               </div>
@@ -1033,10 +1066,21 @@ export default function Home() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
-              <div className="text-center text-gray-400 py-12">
-                <Trash2 className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p>回收站为空</p>
-              </div>
+              {(storage.recycleBin || []).length === 0 ? (
+                <div className="text-center text-gray-400 py-12">
+                  <Trash2 className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <p>回收站为空</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(storage.recycleBin || []).map((item: any) => (
+                    <div key={item.id} className="bg-gray-50 rounded-[1rem] p-3 flex items-center justify-between">
+                      <span className="text-sm">{item.content}</span>
+                      <button onClick={() => handleRestoreRecycleItem(item.id)} className="text-xs px-3 py-1 rounded-[999px] bg-blue-600 text-white">恢复</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="p-6 border-t flex justify-end">
               <button className="text-red-600 rounded-[999px] py-3 px-6 font-medium hover:bg-red-50 transition-all">
