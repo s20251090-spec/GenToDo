@@ -298,6 +298,28 @@ export default function Home() {
     window.location.reload();
   };
 
+  const handleImportData = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(String(reader.result));
+          saveStorage(parsed);
+          alert("数据导入成功");
+        } catch {
+          alert("导入失败：文件格式无效");
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
 
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
@@ -786,6 +808,10 @@ export default function Home() {
                     <Trash2 className="w-4 h-4 mr-2" />
                     清空所有本地数据
                   </button>
+                  <button onClick={handleImportData} className="w-full bg-gray-100 text-blue-600 rounded-[999px] py-3 px-6 font-medium hover:bg-blue-50 transition-all text-left flex items-center">
+                    <Download className="w-4 h-4 mr-2" />
+                    导入备份数据
+                  </button>
                 </div>
               </div>
 
@@ -1023,6 +1049,7 @@ export default function Home() {
                 {generationError && (
                   <div className="bg-red-50 border border-red-100 rounded-[2rem] p-4">
                     <p className="text-sm text-red-700">{generationError}</p>
+                    <button onClick={handleGeneratePlan} className="mt-2 text-xs px-3 py-1 rounded-[999px] bg-red-600 text-white">重试生成</button>
                   </div>
                 )}
               </div>
