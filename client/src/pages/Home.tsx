@@ -283,6 +283,21 @@ export default function Home() {
     setCurrentPage("settings");
   };
 
+  const handleSaveSettingsQuick = () => {
+    const nextStorage = { ...storage, examScope };
+    saveStorage(nextStorage);
+    setSettingsSaved(true);
+    setTimeout(() => setSettingsSaved(false), 2000);
+    alert("设置已保存");
+  };
+
+  const handleClearAllData = () => {
+    if (!confirm("确定要清空所有本地数据吗？此操作不可撤销。")) return;
+    localStorage.removeItem("gentodo_storage");
+    localStorage.removeItem("gentodo_onboarding_done");
+    window.location.reload();
+  };
+
 
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
@@ -723,7 +738,7 @@ export default function Home() {
                   </div>
 
                   <div className="flex justify-end pt-2">
-                    <button className="bg-blue-600 text-white rounded-[999px] py-3 px-8 font-medium hover:bg-blue-700 transition-all flex items-center gap-2">
+                    <button onClick={handleSaveSettingsQuick} className="bg-blue-600 text-white rounded-[999px] py-3 px-8 font-medium hover:bg-blue-700 transition-all flex items-center gap-2">
                       <Sparkles className="w-4 h-4" />
                       提交生成复习计划
                     </button>
@@ -755,11 +770,19 @@ export default function Home() {
                   数据管理
                 </h3>
                 <div className="space-y-3">
-                  <button className="w-full bg-gray-100 text-gray-700 rounded-[999px] py-3 px-6 font-medium hover:bg-gray-200 transition-all text-left flex items-center">
+                  <button onClick={() => {
+                    const blob = new Blob([JSON.stringify(storage, null, 2)], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `gentodo-backup-${new Date().toISOString().slice(0, 10)}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }} className="w-full bg-gray-100 text-gray-700 rounded-[999px] py-3 px-6 font-medium hover:bg-gray-200 transition-all text-left flex items-center">
                     <Download className="w-4 h-4 mr-2" />
                     一键导出所有数据
                   </button>
-                  <button className="w-full bg-gray-100 text-red-600 rounded-[999px] py-3 px-6 font-medium hover:bg-red-50 transition-all text-left flex items-center">
+                  <button onClick={handleClearAllData} className="w-full bg-gray-100 text-red-600 rounded-[999px] py-3 px-6 font-medium hover:bg-red-50 transition-all text-left flex items-center">
                     <Trash2 className="w-4 h-4 mr-2" />
                     清空所有本地数据
                   </button>
