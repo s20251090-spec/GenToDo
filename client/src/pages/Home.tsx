@@ -629,6 +629,16 @@ export default function Home() {
         {/* AI Editor Page */}
         {currentPage === "ai-editor" && (
           <div className="animate-fadeIn">
+            <div className="mb-8 bg-white rounded-[2rem] p-4 border border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-[999px] bg-blue-100 flex items-center justify-center text-blue-600 font-bold">U</div>
+                <div>
+                  <p className="font-semibold text-gray-800">学习者档案</p>
+                  <p className="text-xs text-gray-500">{storage.examScope ? "考试范围已配置" : "请先配置考试范围"}</p>
+                </div>
+              </div>
+              <button className="px-4 py-2 rounded-[999px] bg-gray-100 text-sm">编辑资料</button>
+            </div>
             <div className="mb-8">
               <h2 className="text-[clamp(1.5rem,3vw,2rem)] font-bold text-gray-800 mb-2">
                 AI 学习计划管理
