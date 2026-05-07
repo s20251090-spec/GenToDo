@@ -141,12 +141,6 @@ export default function Home() {
 
   const handleGeneratePlan = async () => {
     setGenerationError("");
-    if (!selectedPlanId) {
-      const msg = "请先选择一个总计划表，再生成每日待办。";
-      setGenerationError(msg);
-      alert(msg);
-      return;
-    }
     if (!selectedDate) {
       const msg = "请先选择日期，再生成每日待办。";
       setGenerationError(msg);
@@ -157,13 +151,14 @@ export default function Home() {
     setAiLoading(true);
     try {
       const selectedPlan = (storage.planList || []).find((p: any) => p.id === selectedPlanId);
-      if (!selectedPlan) {
-        const msg = "未找到已选总计划，请重新选择。";
+      const scope = storage.examScope || examScope;
+      if (!selectedPlan && !scope) {
+        const msg = "请先填写考试范围，或先创建总计划。";
         setGenerationError(msg);
         alert(msg);
         return;
       }
-      const prompt = `你是专业的备考学习计划规划师。请仅输出Markdown无序列表任务，不要输出任何解释。\n\n(总学习计划表):\n${selectedPlan.content}\n\n(考试截止日期): ${storage.examDate || "未设置"}\n(考试核心范围): ${storage.examScope || examScope || "未设置"}\n(当日指定学习主题): ${dailyTheme || "综合复习"}\n(用户已完成历史学习任务全量记录): ${JSON.stringify(storage.learningHistory || {})}\n(计划生成日期): ${selectedDate}\n\n输出格式强制：\n- 【任务内容】 | 预计耗时：(XX分钟) | 优先级：(高/中/低)`;
+      const prompt = `你是专业的备考学习计划规划师。请仅输出Markdown无序列表任务，不要输出任何解释。\n\n(总学习计划表):\n${selectedPlan?.content || "暂无总计划，请基于考试核心范围生成"}\n\n(考试截止日期): ${storage.examDate || "未设置"}\n(考试核心范围): ${scope || "未设置"}\n(当日指定学习主题): ${dailyTheme || "综合复习"}\n(用户已完成历史学习任务全量记录): ${JSON.stringify(storage.learningHistory || {})}\n(计划生成日期): ${selectedDate}\n\n输出格式强制：\n- 【任务内容】 | 预计耗时：(XX分钟) | 优先级：(高/中/低)`;
 
       const result = await generatePlanMutation.mutateAsync({ prompt });
       const plan = result.result;
@@ -231,6 +226,13 @@ export default function Home() {
     saveStorage(nextStorage);
   };
 
+  const handleToggleTodo = (todoId: number) => {
+    const todayKey = getTodayKey();
+    const todayTodos = [...(storage?.todoHistory?.[todayKey] || [])];
+    const nextTodos = todayTodos.map((t: any) => (t.id === todoId ? { ...t, completed: !t.completed } : t));
+    saveStorage({ ...storage, todoHistory: { ...(storage.todoHistory || {}), [todayKey]: nextTodos } });
+  };
+
   const handleRestoreRecycleItem = (itemId: number) => {
     const item = (storage.recycleBin || []).find((r: any) => r.id === itemId);
     if (!item) return;
@@ -279,6 +281,43 @@ export default function Home() {
     localStorage.setItem("gentodo_onboarding_done", "1");
     setShowWelcome(false);
     setCurrentPage("settings");
+  };
+
+  const handleSaveSettingsQuick = () => {
+    const nextStorage = { ...storage, examScope };
+    saveStorage(nextStorage);
+    setSettingsSaved(true);
+    setTimeout(() => setSettingsSaved(false), 2000);
+    alert("设置已保存");
+  };
+
+  const handleClearAllData = () => {
+    if (!confirm("确定要清空所有本地数据吗？此操作不可撤销。")) return;
+    localStorage.removeItem("gentodo_storage");
+    localStorage.removeItem("gentodo_onboarding_done");
+    window.location.reload();
+  };
+
+  const handleImportData = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(String(reader.result));
+          saveStorage(parsed);
+          alert("数据导入成功");
+        } catch {
+          alert("导入失败：文件格式无效");
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
   };
 
 
@@ -568,7 +607,7 @@ export default function Home() {
               ) : (
                 todos.map((todo) => (
                   <div key={todo.id} className="bg-white rounded-[2rem] shadow-sm p-5 border border-gray-100 flex items-center gap-4">
-                    <input type="checkbox" checked={!!todo.completed} readOnly className="w-5 h-5" />
+                    <input type="checkbox" checked={!!todo.completed} onChange={() => handleToggleTodo(todo.id)} className="w-5 h-5" />
                     <div className="text-gray-800 text-sm">
                       <MarkdownRenderer content={todo.content} />
                     </div>
@@ -721,7 +760,7 @@ export default function Home() {
                   </div>
 
                   <div className="flex justify-end pt-2">
-                    <button className="bg-blue-600 text-white rounded-[999px] py-3 px-8 font-medium hover:bg-blue-700 transition-all flex items-center gap-2">
+                    <button onClick={handleSaveSettingsQuick} className="bg-blue-600 text-white rounded-[999px] py-3 px-8 font-medium hover:bg-blue-700 transition-all flex items-center gap-2">
                       <Sparkles className="w-4 h-4" />
                       提交生成复习计划
                     </button>
@@ -753,13 +792,25 @@ export default function Home() {
                   数据管理
                 </h3>
                 <div className="space-y-3">
-                  <button className="w-full bg-gray-100 text-gray-700 rounded-[999px] py-3 px-6 font-medium hover:bg-gray-200 transition-all text-left flex items-center">
+                  <button onClick={() => {
+                    const blob = new Blob([JSON.stringify(storage, null, 2)], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `gentodo-backup-${new Date().toISOString().slice(0, 10)}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }} className="w-full bg-gray-100 text-gray-700 rounded-[999px] py-3 px-6 font-medium hover:bg-gray-200 transition-all text-left flex items-center">
                     <Download className="w-4 h-4 mr-2" />
                     一键导出所有数据
                   </button>
-                  <button className="w-full bg-gray-100 text-red-600 rounded-[999px] py-3 px-6 font-medium hover:bg-red-50 transition-all text-left flex items-center">
+                  <button onClick={handleClearAllData} className="w-full bg-gray-100 text-red-600 rounded-[999px] py-3 px-6 font-medium hover:bg-red-50 transition-all text-left flex items-center">
                     <Trash2 className="w-4 h-4 mr-2" />
                     清空所有本地数据
+                  </button>
+                  <button onClick={handleImportData} className="w-full bg-gray-100 text-blue-600 rounded-[999px] py-3 px-6 font-medium hover:bg-blue-50 transition-all text-left flex items-center">
+                    <Download className="w-4 h-4 mr-2" />
+                    导入备份数据
                   </button>
                 </div>
               </div>
@@ -977,7 +1028,7 @@ export default function Home() {
                 <div>
                   <label className="text-sm font-medium mb-1 block">参考总计划（必选）</label>
                   <select value={selectedPlanId} onChange={(e) => setSelectedPlanId(e.target.value)} className="w-full bg-gray-50 rounded-[2rem] px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600">
-                    <option value="">请选择总计划</option>
+                    <option value="">{(storage.planList || []).length === 0 ? "暂无总计划（可直接基于考试范围生成）" : "请选择总计划（可选）"}</option>
                     {(storage.planList || []).map((plan: any) => (
                       <option key={plan.id} value={plan.id}>{plan.name}</option>
                     ))}
@@ -998,6 +1049,7 @@ export default function Home() {
                 {generationError && (
                   <div className="bg-red-50 border border-red-100 rounded-[2rem] p-4">
                     <p className="text-sm text-red-700">{generationError}</p>
+                    <button onClick={handleGeneratePlan} className="mt-2 text-xs px-3 py-1 rounded-[999px] bg-red-600 text-white">重试生成</button>
                   </div>
                 )}
               </div>
