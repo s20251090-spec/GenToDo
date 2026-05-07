@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
+import FloatingActionButton from './FloatingActionButton';
 
 export default function AIChatModule({ onBack }: { onBack: () => void }) {
   const [messages, setMessages] = useState<{role:'user'|'ai',content:string}[]>([]);
   const [input, setInput] = useState('');
-  const [showDrawer, setShowDrawer] = useState(false);
   const [showModal, setShowModal] = useState<'master'|'daily'|'modify'|null>(null);
 
   const send = () => {
@@ -35,12 +35,13 @@ export default function AIChatModule({ onBack }: { onBack: () => void }) {
     <nav className="w-full px-6 py-3 border-t border-gray-100 bg-white flex items-center justify-between z-30">
       <button className="text-[#165DFF] text-xs">Home</button><button className="text-xs text-gray-400">Plans</button><button className="text-xs text-gray-400">History</button><button className="text-xs text-gray-400">Mine</button>
     </nav>
-    <button onClick={()=>setShowDrawer(v=>!v)} className="fixed right-6 bottom-24 w-14 h-14 rounded-full bg-[#165DFF] text-white shadow-lg">+</button>
-    {showDrawer && <div className="fixed inset-0 bg-black/40" onClick={()=>setShowDrawer(false)}><div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[32px] p-6" onClick={(e)=>e.stopPropagation()}>
-      <button onClick={()=>setShowModal('master')} className="w-full p-3 bg-[#E8F3FF] rounded-2xl mb-2 text-left">Make Master Study Plan</button>
-      <button onClick={()=>setShowModal('daily')} className="w-full p-3 bg-[#E8F3FF] rounded-2xl mb-2 text-left">Make Daily Study Plan</button>
-      <button onClick={()=>setShowModal('modify')} className="w-full p-3 bg-[#E8F3FF] rounded-2xl text-left">Modify Existing Plan</button>
-    </div></div>}
+    <FloatingActionButton
+      bottom="88px"
+      right="24px"
+      onMasterPlanClick={() => setShowModal('master')}
+      onDailyPlanClick={() => setShowModal('daily')}
+      onModifyPlanClick={() => setShowModal('modify')}
+    />
     {showModal && <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4"><div className="bg-white rounded-[32px] p-6 w-full max-w-lg"><h3 className="font-bold mb-3">{showModal==='master'?'Master Study Plan':showModal==='daily'?'Daily Study Plan':'Modify Study Plan'}</h3><textarea className="w-full border rounded-2xl p-3 min-h-[120px]" placeholder="Input requirements..."/><div className="mt-3 flex gap-2 justify-end"><button onClick={()=>setShowModal(null)} className="px-4 py-2 rounded-[40px] border">Cancel</button><button className="px-4 py-2 rounded-[40px] bg-[#165DFF] text-white">Generate Plan</button></div></div></div>}
   </div>;
 }
