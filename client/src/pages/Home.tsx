@@ -19,6 +19,7 @@ import {
   Download,
   Database,
   Home as HomeIcon,
+  Plus,
 } from "lucide-react";
 
 export default function Home() {
@@ -634,10 +635,10 @@ export default function Home() {
                   },
                 });
               }}
-              className="fixed bottom-[92px] left-6 z-40 w-14 h-14 rounded-full bg-blue-600 text-white text-3xl leading-none shadow-lg"
+              className="fixed bottom-[92px] left-6 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-xl flex items-center justify-center hover:scale-105 transition-transform"
               aria-label="快速添加待办"
             >
-              +
+              <Plus className="w-6 h-6" />
             </button>
           </div>
         )}
