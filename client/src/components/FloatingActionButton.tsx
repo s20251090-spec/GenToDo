@@ -7,6 +7,7 @@ export interface FloatingActionButtonProps {
   onModifyPlanClick?: () => void;
   bottom?: string;
   right?: string;
+  left?: string;
   zIndex?: number;
   primaryColor?: string;
 }
@@ -18,6 +19,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
     onModifyPlanClick,
     bottom = '20px',
     right = '20px',
+    left,
     zIndex = 999,
     primaryColor = '#165DFF',
   } = props;
@@ -43,6 +45,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
     '--fab-z-index': zIndex.toString(),
     '--fab-bottom': bottom,
     '--fab-right': right,
+    '--fab-left': left || 'auto',
   } as React.CSSProperties;
 
   return (

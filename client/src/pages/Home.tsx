@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import AIChatModule from "@/components/AIChatModule";
+import FloatingActionButton from "@/components/FloatingActionButton";
 import { useStreamingAI } from "@/hooks/useStreamingAI";
 import {
   Sparkles,
@@ -617,12 +618,20 @@ export default function Home() {
                 ))
               )}
             </div>
-            <button
-              onClick={handleOpenTodoComposer}
-              className="fixed bottom-24 right-6 w-14 h-14 bg-blue-600 text-white rounded-[999px] shadow-lg hover:bg-blue-700 transition-all flex items-center justify-center text-3xl leading-none"
-            >
-              +
-            </button>
+            <FloatingActionButton
+              bottom="92px"
+              right="auto"
+              left="24px"
+              onMasterPlanClick={() => openModal("plan")}
+              onDailyPlanClick={() => {
+                setComposerTab("ai");
+                openModal("todoComposer");
+              }}
+              onModifyPlanClick={() => {
+                setComposerTab("manual");
+                openModal("todoComposer");
+              }}
+            />
           </div>
         )}
 
