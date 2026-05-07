@@ -618,22 +618,14 @@ export default function Home() {
                 ))
               )}
             </div>
-            <button
-              onClick={() => {
-                const todayKey = getTodayKey();
-                const nextTodo = {
-                  id: Date.now(),
-                  content: "新待办任务",
-                  completed: false,
-                  createdAt: new Date().toISOString(),
-                };
-                saveStorage({
-                  ...storage,
-                  todoHistory: {
-                    ...(storage.todoHistory || {}),
-                    [todayKey]: [...(storage.todoHistory?.[todayKey] || []), nextTodo],
-                  },
-                });
+            <FloatingActionButton
+              left="24px"
+              right="auto"
+              bottom="92px"
+              onMasterPlanClick={() => openModal("plan")}
+              onDailyPlanClick={() => {
+                setComposerTab("ai");
+                openModal("todoComposer");
               }}
               className="fixed bottom-[92px] left-6 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-xl flex items-center justify-center hover:scale-105 transition-transform"
               aria-label="快速添加待办"
