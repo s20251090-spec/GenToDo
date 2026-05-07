@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
+import AIChatModule from "@/components/AIChatModule";
 import { useStreamingAI } from "@/hooks/useStreamingAI";
 import {
   Sparkles,
@@ -838,88 +839,8 @@ export default function Home() {
 
       {/* Modals */}
       {showModals.chat && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white rounded-[2rem] w-full max-w-2xl h-[80vh] flex flex-col animate-slideUp">
-            <div className="flex justify-between items-center p-6 border-b">
-              <h3 className="text-xl font-bold">AI对话记录</h3>
-              <button
-                onClick={() => closeModal("chat")}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {messages.length === 0 ? (
-                <div className="text-center text-gray-400 py-8">暂无对话记录</div>
-              ) : (
-                messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}
-                  >
-                    <div
-                      className={`max-w-lg px-4 py-2 rounded-[2rem] ${
-                        msg.type === "user"
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
-                    >
-                      {msg.type === "user" ? (
-                        msg.content
-                      ) : (
-                        <div className="text-sm">
-                          <MarkdownRenderer content={msg.content} />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-              {isStreaming && streamingText && (
-                <div className="flex justify-start">
-                  <div className="max-w-lg bg-gray-100 text-gray-800 px-4 py-2 rounded-[2rem]">
-                    <div className="text-sm">
-                      <MarkdownRenderer content={streamingText} />
-                    </div>
-                  </div>
-                </div>
-              )}
-              {isStreaming && !streamingText && (
-                <div className="flex justify-start">
-                  <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-[2rem]">
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-gray-600 rounded-[999px] animate-bounce"></div>
-                      <div className="w-2 h-2 bg-gray-600 rounded-[999px] animate-bounce" style={{ animationDelay: "0.2s" }}></div>
-                      <div className="w-2 h-2 bg-gray-600 rounded-[999px] animate-bounce" style={{ animationDelay: "0.4s" }}></div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="p-6 border-t flex gap-2">
-              <input
-                type="text"
-                className="flex-1 bg-gray-50 rounded-[999px] px-4 py-3 outline-none border-2 border-transparent focus:border-blue-600 transition-all"
-                placeholder="输入你的调整需求..."
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter" && !aiLoading) {
-                    handleSendMessage();
-                  }
-                }}
-                disabled={aiLoading}
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={aiLoading}
-                className="bg-blue-600 text-white rounded-[999px] p-3 hover:bg-blue-700 transition-all disabled:opacity-50"
-              >
-                发送
-              </button>
-            </div>
-          </div>
+        <div className="fixed inset-0 z-50">
+          <AIChatModule onBack={() => closeModal("chat")} />
         </div>
       )}
 
