@@ -619,9 +619,9 @@ export default function Home() {
               )}
             </div>
             <FloatingActionButton
-              bottom="92px"
-              right="auto"
               left="24px"
+              right="auto"
+              bottom="92px"
               onMasterPlanClick={() => openModal("plan")}
               onDailyPlanClick={() => {
                 setComposerTab("ai");
@@ -849,7 +849,7 @@ export default function Home() {
       {/* Modals */}
       {showModals.chat && (
         <div className="fixed inset-0 z-50">
-          <AIChatModule onBack={() => closeModal("chat")} />
+          <AIChatModule onBack={() => closeModal("chat")} storage={storage} saveStorage={saveStorage} />
         </div>
       )}
 
