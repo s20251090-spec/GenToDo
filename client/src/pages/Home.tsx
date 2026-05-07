@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import AIChatModule from "@/components/AIChatModule";
-import FloatingActionButton from "@/components/FloatingActionButton";
 import { useStreamingAI } from "@/hooks/useStreamingAI";
 import {
   Sparkles,
@@ -20,6 +19,7 @@ import {
   Download,
   Database,
   Home as HomeIcon,
+  Plus,
 } from "lucide-react";
 
 export default function Home() {
@@ -618,20 +618,28 @@ export default function Home() {
                 ))
               )}
             </div>
-            <FloatingActionButton
-              bottom="92px"
-              right="auto"
-              left="24px"
-              onMasterPlanClick={() => openModal("plan")}
-              onDailyPlanClick={() => {
-                setComposerTab("ai");
-                openModal("todoComposer");
+            <button
+              onClick={() => {
+                const todayKey = getTodayKey();
+                const nextTodo = {
+                  id: Date.now(),
+                  content: "新待办任务",
+                  completed: false,
+                  createdAt: new Date().toISOString(),
+                };
+                saveStorage({
+                  ...storage,
+                  todoHistory: {
+                    ...(storage.todoHistory || {}),
+                    [todayKey]: [...(storage.todoHistory?.[todayKey] || []), nextTodo],
+                  },
+                });
               }}
-              onModifyPlanClick={() => {
-                setComposerTab("manual");
-                openModal("todoComposer");
-              }}
-            />
+              className="fixed bottom-[92px] left-6 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-xl flex items-center justify-center hover:scale-105 transition-transform"
+              aria-label="快速添加待办"
+            >
+              <Plus className="w-6 h-6" />
+            </button>
           </div>
         )}
 
@@ -849,7 +857,7 @@ export default function Home() {
       {/* Modals */}
       {showModals.chat && (
         <div className="fixed inset-0 z-50">
-          <AIChatModule onBack={() => closeModal("chat")} />
+          <AIChatModule onBack={() => closeModal("chat")} storage={storage} saveStorage={saveStorage} />
         </div>
       )}
 
