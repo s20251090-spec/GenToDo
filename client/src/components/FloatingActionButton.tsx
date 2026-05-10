@@ -1,5 +1,4 @@
 import React, { useState, useCallback } from 'react';
-import { Compass, CalendarDays, PenSquare } from 'lucide-react';
 import './FloatingActionButton.css';
 
 export interface FloatingActionButtonProps {
@@ -26,14 +25,8 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
   } = props;
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-
-  const toggleDrawer = useCallback(() => {
-    setIsDrawerOpen((prev) => !prev);
-  }, []);
-
-  const closeDrawer = useCallback(() => {
-    setIsDrawerOpen(false);
-  }, []);
+  const toggleDrawer = useCallback(() => setIsDrawerOpen((prev) => !prev), []);
+  const closeDrawer = useCallback(() => setIsDrawerOpen(false), []);
 
   const handleMenuClick = useCallback(
     (callback?: () => void) => {
@@ -57,70 +50,41 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
 
   return (
     <div className="fab-root" style={cssVars}>
-      <div
-        className={`fab-overlay ${isDrawerOpen ? 'fab-overlay--open' : ''}`}
-        onClick={closeDrawer}
-      />
+      <div className={`fab-overlay ${isDrawerOpen ? 'fab-overlay--open' : ''}`} onClick={closeDrawer} />
 
-      <div
-        className={`fab-drawer ${isDrawerOpen ? 'fab-drawer--open' : ''}`}
-        onClick={stopPropagation}
-      >
+      <div className={`fab-drawer ${isDrawerOpen ? 'fab-drawer--open' : ''}`} onClick={stopPropagation}>
         <div className="fab-drawer__drag-bar" />
-        <h3 className="fab-drawer__title">学习工具</h3>
+        <h3 className="fab-drawer__title">Learning Tools</h3>
 
         <div className="fab-drawer__menu-list">
-          <button
-            className="fab-drawer__menu-item"
-            onClick={() => handleMenuClick(onMasterPlanClick)}
-          >
-            <div className="fab-drawer__menu-icon">
-              <i className="fa-solid fa-route" />
-            </div>
+          <button className="fab-drawer__menu-item" onClick={() => handleMenuClick(onMasterPlanClick)}>
+            <div className="fab-drawer__menu-icon">🧭</div>
             <div className="fab-drawer__menu-text">
-              <h4>制作总体学习计划</h4>
-              <p>自定义你的完整学习路线图</p>
+              <h4>Make Master Study Plan</h4>
+              <p>Customize your full learning roadmap</p>
             </div>
           </button>
 
-          <button
-            className="fab-drawer__menu-item"
-            onClick={() => handleMenuClick(onDailyPlanClick)}
-          >
-            <div className="fab-drawer__menu-icon">
-              <i className="fa-solid fa-calendar-day" />
-            </div>
+          <button className="fab-drawer__menu-item" onClick={() => handleMenuClick(onDailyPlanClick)}>
+            <div className="fab-drawer__menu-icon">📅</div>
             <div className="fab-drawer__menu-text">
-              <h4>制作每日学习计划</h4>
-              <p>安排你的每日学习任务</p>
+              <h4>Make Daily Study Plan</h4>
+              <p>Arrange your daily learning tasks</p>
             </div>
           </button>
 
-          <button
-            className="fab-drawer__menu-item"
-            onClick={() => handleMenuClick(onModifyPlanClick)}
-          >
-            <div className="fab-drawer__menu-icon">
-              <i className="fa-solid fa-pen-to-square" />
-            </div>
+          <button className="fab-drawer__menu-item" onClick={() => handleMenuClick(onModifyPlanClick)}>
+            <div className="fab-drawer__menu-icon">✏️</div>
             <div className="fab-drawer__menu-text">
-              <h4>修改已有计划</h4>
-              <p>调整你当前的学习计划</p>
+              <h4>Modify Existing Plan</h4>
+              <p>Adjust your current study plan</p>
             </div>
           </button>
         </div>
       </div>
 
-      <button
-        className={`fab-button ${isDrawerOpen ? 'fab-button--open' : ''}`}
-        onClick={toggleDrawer}
-        aria-label="Open learning tools menu"
-      >
-        <i
-          className={`fa-solid fa-plus fab-button__icon ${
-            isDrawerOpen ? 'fab-button__icon--rotate' : ''
-          }`}
-        />
+      <button className={`fab-button ${isDrawerOpen ? 'fab-button--open' : ''}`} onClick={toggleDrawer} aria-label="Open learning tools menu">
+        <span className={`fab-button__icon ${isDrawerOpen ? 'fab-button__icon--rotate' : ''}`}>+</span>
       </button>
     </div>
   );

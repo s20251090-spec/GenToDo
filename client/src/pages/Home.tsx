@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import AIChatModule from "@/components/AIChatModule";
+import FloatingActionButton from "@/components/FloatingActionButton";
 import { useStreamingAI } from "@/hooks/useStreamingAI";
 import {
   Sparkles,
@@ -619,19 +620,19 @@ export default function Home() {
               )}
             </div>
             <FloatingActionButton
-              left="24px"
-              right="auto"
               bottom="92px"
+              right="auto"
+              left="24px"
               onMasterPlanClick={() => openModal("plan")}
               onDailyPlanClick={() => {
                 setComposerTab("ai");
                 openModal("todoComposer");
               }}
-              className="fixed bottom-[92px] left-6 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-xl flex items-center justify-center hover:scale-105 transition-transform"
-              aria-label="快速添加待办"
-            >
-              <Plus className="w-6 h-6" />
-            </button>
+              onModifyPlanClick={() => {
+                setComposerTab("manual");
+                openModal("todoComposer");
+              }}
+            />
           </div>
         )}
 
@@ -849,7 +850,7 @@ export default function Home() {
       {/* Modals */}
       {showModals.chat && (
         <div className="fixed inset-0 z-50">
-          <AIChatModule onBack={() => closeModal("chat")} storage={storage} saveStorage={saveStorage} />
+          <AIChatModule onBack={() => closeModal("chat")} />
         </div>
       )}
 
