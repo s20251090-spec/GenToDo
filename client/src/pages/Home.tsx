@@ -67,6 +67,14 @@ export default function Home() {
   const [aiDetailView, setAiDetailView] = useState<"grid" | "chat" | "plan" | "scope" | "recycle">("grid");
   const [showWelcome, setShowWelcome] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(1);
+
+  const [htmlComposerTab, setHtmlComposerTab] = useState<"manual" | "ai">("manual");
+  const [htmlName, setHtmlName] = useState("");
+  const [htmlCode, setHtmlCode] = useState("");
+  const [htmlPreviewDoc, setHtmlPreviewDoc] = useState<any>(null);
+  const [editingHtmlId, setEditingHtmlId] = useState<number | null>(null);
+  const [aiHtmlForm, setAiHtmlForm] = useState({ title: "", feature: "", concept: "", style: "", extra: "" });
+  const [aiHtmlLoading, setAiHtmlLoading] = useState(false);
   const [commandTemplates] = useState({
     A: "生成总计划: {{exam_scope}} {{exam_date}}",
     B: "每日生成: {{selected_date}} {{daily_theme}} {{master_plan}}",
@@ -286,6 +294,54 @@ export default function Home() {
     localStorage.setItem("gentodo_onboarding_done", "1");
     setShowWelcome(false);
     setCurrentPage("settings");
+  };
+
+
+  const saveHtmlDoc = () => {
+    if (!htmlName.trim() || !htmlCode.trim()) {
+      alert("请填写名称并粘贴HTML");
+      return;
+    }
+    const current = [...(storage.htmlDocs || [])];
+    const next = editingHtmlId
+      ? current.map((d: any) => (d.id === editingHtmlId ? { ...d, name: htmlName.trim(), html: htmlCode, updatedAt: new Date().toISOString() } : d))
+      : [...current, { id: Date.now(), name: htmlName.trim(), html: htmlCode, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }];
+    saveStorage({ ...storage, htmlDocs: next });
+    setHtmlName("");
+    setHtmlCode("");
+    setEditingHtmlId(null);
+  };
+
+  const openHtmlManualComposer = (doc?: any) => {
+    setHtmlComposerTab("manual");
+    if (doc) {
+      setEditingHtmlId(doc.id);
+      setHtmlName(doc.name || "");
+      setHtmlCode(doc.html || "");
+    } else {
+      setEditingHtmlId(null);
+      setHtmlName("");
+      setHtmlCode("");
+    }
+    openModal("recycle");
+  };
+
+  const generateHtmlByAI = async () => {
+    setAiHtmlLoading(true);
+    try {
+      const prompt = `AI 专属生成HTML页面 专用提示词\n固定系统指令\n你是专业前端页面开发工程师，专注根据用户需求纯生成完整可直接运行HTML代码，全程不额外解说、不添加功能介绍、不文字描述页面、不额外赘述内容，仅输出纯净HTML源码。\n核心强制规则\n1. 严格读取用户传入全部变量，按照需求定制页面样式、功能、结构、配色布局\n2. 最终输出内容只允许出现完整HTML代码，禁止任何文字说明、效果讲解、功能介绍、排版描述、多余话术\n3. 代码结构完整规范，包含html、head、body标签，自带内置CSS样式，无需额外引入外部文件，可一键复制运行\n4. 遵循用户指定设计风格、设计理念、页面功能，精准贴合标题主题制作页面\n5. 无冗余代码、无无效注释、不掺杂无关内容，页面美观适配移动端与电脑端\n动态传入变量（固定5项）\n(页面标题)：${aiHtmlForm.title}\n(设计功能)：${aiHtmlForm.feature}\n(设计理念)：${aiHtmlForm.concept}\n(设计风格)：${aiHtmlForm.style}\n(其他额外要求)：${aiHtmlForm.extra}\n输出硬性规范\n1. 全程仅输出一段完整闭合HTML代码块，使用\`\`\`html 代码包裹格式\n2. 不拆分内容、不分段讲解、不预览效果、不补充制作思路\n3. CSS内部嵌入页面当中，布局合理、样式精致、交互流畅\n4. 严格匹配五项变量所有要求，不偏离主题、不私自增减功能与样式\n5. 输出完毕无任何收尾文字，只留存纯净可用网页源码`;
+      const result = await generatePlanMutation.mutateAsync({ prompt });
+      const raw = result.result || "";
+      const m = raw.match(/```html\s*([\s\S]*?)```/i);
+      const generated = (m ? m[1] : raw).trim();
+      setHtmlComposerTab("manual");
+      setHtmlName(aiHtmlForm.title || `HTML文档-${Date.now()}`);
+      setHtmlCode(generated);
+    } catch (e) {
+      alert("AI 生成失败，请重试");
+    } finally {
+      setAiHtmlLoading(false);
+    }
   };
 
   const handleSaveSettingsQuick = () => {
@@ -622,9 +678,9 @@ export default function Home() {
               )}
             </div>
             <FloatingActionButton
-              bottom="92px"
-              right="auto"
               left="24px"
+              right="auto"
+              bottom="92px"
               onMasterPlanClick={() => openModal("plan")}
               onDailyPlanClick={() => {
                 setComposerTab("ai");
@@ -713,10 +769,10 @@ export default function Home() {
                 <div className="w-14 h-14 bg-red-100 rounded-[999px] flex items-center justify-center mb-4 mx-auto group-hover:scale-110 transition-transform">
                   <Trash2 className="w-7 h-7 text-red-500" />
                 </div>
-                <h3 className="font-bold text-lg mb-2">回收站</h3>
-                <p className="text-sm text-gray-500">恢复或彻底删除记录</p>
+                <h3 className="font-bold text-lg mb-2">其他工具</h3>
+                <p className="text-sm text-gray-500">HTML 渲染器文档管理</p>
                 <span className="mt-3 inline-block text-xs bg-red-100 text-red-500 px-3 py-1 rounded-[999px]">
-                  {storage.recycleBin?.length || 0}条记录
+                  {storage.htmlDocs?.length || 0}个文档
                 </span>
               </button>
             </div>
@@ -852,7 +908,7 @@ export default function Home() {
       {/* Modals */}
       {showModals.chat && (
         <div className="fixed inset-0 z-50">
-          <AIChatModule onBack={() => closeModal("chat")} />
+          <AIChatModule onBack={() => closeModal("chat")} storage={storage} saveStorage={saveStorage} />
         </div>
       )}
 
@@ -1040,32 +1096,58 @@ export default function Home() {
 
       {showModals.todoComposer && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white rounded-[2rem] w-full max-w-2xl h-[80vh] flex flex-col animate-slideUp">
-            <div className="flex justify-between items-center p-6 border-b">
-              <h3 className="text-xl font-bold">添加今日待办</h3>
-              <button onClick={() => closeModal("todoComposer")} className="text-gray-400 hover:text-gray-600"><X className="w-6 h-6" /></button>
+          {htmlPreviewDoc && (
+            <div className="bg-white w-full h-full relative">
+              <button onClick={() => setHtmlPreviewDoc(null)} className="absolute top-4 left-4 z-10 w-10 h-10 rounded-[9999px] bg-white/90 border flex items-center justify-center"><DoorOpen className="w-5 h-5" /></button>
+              <iframe title="HTML预览" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals" className="w-full h-full border-0" srcDoc={htmlPreviewDoc.html} />
             </div>
-            <div className="flex-1 overflow-y-auto p-6">
-              {(storage.recycleBin || []).length === 0 ? (
-                <div className="text-center text-gray-400 py-12">
-                  <Trash2 className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p>回收站为空</p>
+          )}
+          {!htmlPreviewDoc && (
+          <div className="bg-white rounded-[2rem] w-full max-w-3xl h-[86vh] flex flex-col animate-slideUp relative">
+            <div className="flex justify-between items-center p-5 border-b">
+              <h3 className="text-xl font-bold">其他工具（HTML渲染器）</h3>
+              <button onClick={() => closeModal("recycle")} className="text-gray-400 hover:text-gray-600"><X className="w-6 h-6" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5">
+              <div className="space-y-2 mb-4">
+                {(storage.htmlDocs || []).map((doc: any) => (
+                  <div key={doc.id} onDoubleClick={() => openHtmlManualComposer(doc)} className="bg-gray-50 rounded-[1rem] p-3 flex items-center justify-between">
+                    <span className="text-sm font-medium">{doc.name}</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => setHtmlPreviewDoc(doc)} className="text-xs px-3 py-1 rounded-[999px] bg-blue-600 text-white">预览</button>
+                      <button onClick={() => openHtmlManualComposer(doc)} className="text-xs px-3 py-1 rounded-[999px] bg-gray-200">编辑</button>
+                    </div>
+                  </div>
+                ))}
+                {(storage.htmlDocs || []).length === 0 && <p className="text-sm text-gray-400">暂无HTML文档，点击下方加号创建。</p>}
+              </div>
+              <div className="mb-4 flex bg-gray-100 rounded-[999px] p-1">
+                <button onClick={() => setHtmlComposerTab("manual")} className={`flex-1 py-2 rounded-[999px] ${htmlComposerTab === "manual" ? "bg-white shadow text-blue-600" : "text-gray-500"}`}>手动输入</button>
+                <button onClick={() => setHtmlComposerTab("ai")} className={`flex-1 py-2 rounded-[999px] ${htmlComposerTab === "ai" ? "bg-white shadow text-blue-600" : "text-gray-500"}`}>AI制造</button>
+              </div>
+              {htmlComposerTab === "manual" ? (
+                <div className="space-y-3">
+                  <input value={htmlName} onChange={(e) => setHtmlName(e.target.value)} placeholder="要求填写名称" className="w-full bg-gray-50 rounded-[1rem] px-4 py-3" />
+                  <textarea value={htmlCode} onChange={(e) => setHtmlCode(e.target.value)} placeholder="粘贴html" className="w-full min-h-[260px] bg-gray-50 rounded-[1rem] px-4 py-3 font-mono text-xs" />
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {(storage.recycleBin || []).map((item: any) => (
-                    <div key={item.id} className="bg-gray-50 rounded-[1rem] p-3 flex items-center justify-between">
-                      <span className="text-sm">{item.content}</span>
-                      <button onClick={() => handleRestoreRecycleItem(item.id)} className="text-xs px-3 py-1 rounded-[999px] bg-blue-600 text-white">恢复</button>
-                    </div>
-                  ))}
+                <div className="space-y-3">
+                  <input value={aiHtmlForm.title} onChange={(e) => setAiHtmlForm((p:any) => ({...p, title: e.target.value}))} placeholder="输入标题" className="w-full bg-gray-50 rounded-[1rem] px-4 py-3" />
+                  <textarea value={aiHtmlForm.feature} onChange={(e) => setAiHtmlForm((p:any) => ({...p, feature: e.target.value}))} placeholder="设计功能" className="w-full bg-gray-50 rounded-[1rem] px-4 py-3 min-h-[70px]" />
+                  <textarea value={aiHtmlForm.concept} onChange={(e) => setAiHtmlForm((p:any) => ({...p, concept: e.target.value}))} placeholder="设计理念" className="w-full bg-gray-50 rounded-[1rem] px-4 py-3 min-h-[70px]" />
+                  <textarea value={aiHtmlForm.style} onChange={(e) => setAiHtmlForm((p:any) => ({...p, style: e.target.value}))} placeholder="设计风格" className="w-full bg-gray-50 rounded-[1rem] px-4 py-3 min-h-[70px]" />
+                  <textarea value={aiHtmlForm.extra} onChange={(e) => setAiHtmlForm((p:any) => ({...p, extra: e.target.value}))} placeholder="其他要求" className="w-full bg-gray-50 rounded-[1rem] px-4 py-3 min-h-[70px]" />
+                  {aiHtmlLoading && <div className="text-sm text-blue-600">AI 正在生成中...</div>}
                 </div>
               )}
             </div>
-            <div className="p-6 border-t flex justify-end">
-              <button className="text-red-600 rounded-[999px] py-3 px-6 font-medium hover:bg-red-50 transition-all">
-                清空回收站
-              </button>
+            <div className="p-5 border-t flex justify-between">
+              <button onClick={() => { setHtmlName(""); setHtmlCode(""); setEditingHtmlId(null); closeModal("recycle"); }} className="bg-gray-100 text-gray-700 rounded-[999px] py-2 px-5">取消</button>
+              {htmlComposerTab === "manual" ? (
+                <button onClick={saveHtmlDoc} className="bg-blue-600 text-white rounded-[999px] py-2 px-5">应用</button>
+              ) : (
+                <button onClick={generateHtmlByAI} disabled={aiHtmlLoading} className="bg-blue-600 text-white rounded-[999px] py-2 px-5">生成</button>
+              )}
             </div>
             <button onClick={() => { setHtmlComposerTab("manual"); setEditingHtmlId(null); setHtmlName(""); setHtmlCode(""); }} className="absolute left-5 bottom-5 w-12 h-12 rounded-[999px] bg-white border shadow flex items-center justify-center"><Plus className="w-5 h-5" /></button>
             <button onClick={() => { setHtmlComposerTab("manual"); setEditingHtmlId(null); setHtmlName(""); setHtmlCode(""); }} className="absolute right-5 bottom-5 w-14 h-14 rounded-[999px] bg-blue-600 text-white shadow flex items-center justify-center"><Plus className="w-6 h-6" /></button>
