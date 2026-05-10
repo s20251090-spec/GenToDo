@@ -46,6 +46,19 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
     e.stopPropagation();
   }, []);
 
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    setTouchStartY(e.touches[0]?.clientY ?? null);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (touchStartY === null) return;
+    const currentY = e.touches[0]?.clientY ?? touchStartY;
+    if (currentY - touchStartY > 60) {
+      closeDrawer();
+      setTouchStartY(null);
+    }
+  }, [touchStartY, closeDrawer]);
+
   const cssVars = {
     '--fab-primary-color': primaryColor,
     '--fab-z-index': zIndex.toString(),
@@ -66,7 +79,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
         onClick={stopPropagation}
       >
         <div className="fab-drawer__drag-bar" />
-        <h3 className="fab-drawer__title">Learning Tools</h3>
+        <h3 className="fab-drawer__title">学习工具</h3>
 
         <div className="fab-drawer__menu-list">
           <button
@@ -77,8 +90,8 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
               <i className="fa-solid fa-route" />
             </div>
             <div className="fab-drawer__menu-text">
-              <h4>Make Master Study Plan</h4>
-              <p>Customize your full learning roadmap</p>
+              <h4>制作总学习计划表</h4>
+              <p>自定义你的完整学习路线图</p>
             </div>
           </button>
 
@@ -90,8 +103,8 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
               <i className="fa-solid fa-calendar-day" />
             </div>
             <div className="fab-drawer__menu-text">
-              <h4>Make Daily Study Plan</h4>
-              <p>Arrange your daily learning tasks</p>
+              <h4>制作每日学习计划表</h4>
+              <p>安排你的每日学习任务</p>
             </div>
           </button>
 
@@ -103,8 +116,8 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
               <i className="fa-solid fa-pen-to-square" />
             </div>
             <div className="fab-drawer__menu-text">
-              <h4>Modify Existing Plan</h4>
-              <p>Adjust your current study plan</p>
+              <h4>修改已添加的计划</h4>
+              <p>调整你当前的学习计划</p>
             </div>
           </button>
         </div>
