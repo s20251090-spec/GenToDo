@@ -25,8 +25,14 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
   } = props;
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const toggleDrawer = useCallback(() => setIsDrawerOpen((prev) => !prev), []);
-  const closeDrawer = useCallback(() => setIsDrawerOpen(false), []);
+
+  const toggleDrawer = useCallback(() => {
+    setIsDrawerOpen((prev) => !prev);
+  }, []);
+
+  const closeDrawer = useCallback(() => {
+    setIsDrawerOpen(false);
+  }, []);
 
   const handleMenuClick = useCallback(
     (callback?: () => void) => {
@@ -50,31 +56,52 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
 
   return (
     <div className="fab-root" style={cssVars}>
-      <div className={`fab-overlay ${isDrawerOpen ? 'fab-overlay--open' : ''}`} onClick={closeDrawer} />
+      <div
+        className={`fab-overlay ${isDrawerOpen ? 'fab-overlay--open' : ''}`}
+        onClick={closeDrawer}
+      />
 
-      <div className={`fab-drawer ${isDrawerOpen ? 'fab-drawer--open' : ''}`} onClick={stopPropagation}>
+      <div
+        className={`fab-drawer ${isDrawerOpen ? 'fab-drawer--open' : ''}`}
+        onClick={stopPropagation}
+      >
         <div className="fab-drawer__drag-bar" />
         <h3 className="fab-drawer__title">Learning Tools</h3>
 
         <div className="fab-drawer__menu-list">
-          <button className="fab-drawer__menu-item" onClick={() => handleMenuClick(onMasterPlanClick)}>
-            <div className="fab-drawer__menu-icon">🧭</div>
+          <button
+            className="fab-drawer__menu-item"
+            onClick={() => handleMenuClick(onMasterPlanClick)}
+          >
+            <div className="fab-drawer__menu-icon">
+              <i className="fa-solid fa-route" />
+            </div>
             <div className="fab-drawer__menu-text">
               <h4>Make Master Study Plan</h4>
               <p>Customize your full learning roadmap</p>
             </div>
           </button>
 
-          <button className="fab-drawer__menu-item" onClick={() => handleMenuClick(onDailyPlanClick)}>
-            <div className="fab-drawer__menu-icon">📅</div>
+          <button
+            className="fab-drawer__menu-item"
+            onClick={() => handleMenuClick(onDailyPlanClick)}
+          >
+            <div className="fab-drawer__menu-icon">
+              <i className="fa-solid fa-calendar-day" />
+            </div>
             <div className="fab-drawer__menu-text">
               <h4>Make Daily Study Plan</h4>
               <p>Arrange your daily learning tasks</p>
             </div>
           </button>
 
-          <button className="fab-drawer__menu-item" onClick={() => handleMenuClick(onModifyPlanClick)}>
-            <div className="fab-drawer__menu-icon">✏️</div>
+          <button
+            className="fab-drawer__menu-item"
+            onClick={() => handleMenuClick(onModifyPlanClick)}
+          >
+            <div className="fab-drawer__menu-icon">
+              <i className="fa-solid fa-pen-to-square" />
+            </div>
             <div className="fab-drawer__menu-text">
               <h4>Modify Existing Plan</h4>
               <p>Adjust your current study plan</p>
@@ -83,8 +110,16 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
         </div>
       </div>
 
-      <button className={`fab-button ${isDrawerOpen ? 'fab-button--open' : ''}`} onClick={toggleDrawer} aria-label="Open learning tools menu">
-        <span className={`fab-button__icon ${isDrawerOpen ? 'fab-button__icon--rotate' : ''}`}>+</span>
+      <button
+        className={`fab-button ${isDrawerOpen ? 'fab-button--open' : ''}`}
+        onClick={toggleDrawer}
+        aria-label="Open learning tools menu"
+      >
+        <i
+          className={`fa-solid fa-plus fab-button__icon ${
+            isDrawerOpen ? 'fab-button__icon--rotate' : ''
+          }`}
+        />
       </button>
     </div>
   );
