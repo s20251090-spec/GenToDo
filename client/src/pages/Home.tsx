@@ -20,6 +20,8 @@ import {
   Download,
   Database,
   Home as HomeIcon,
+  Plus,
+  DoorOpen,
 } from "lucide-react";
 
 export default function Home() {
@@ -33,6 +35,7 @@ export default function Home() {
     todoHistory: {},
     learningHistory: {},
     recycleBin: [],
+    htmlDocs: [],
   });
 
   const [todayProgress, setTodayProgress] = useState(0);
@@ -705,6 +708,16 @@ export default function Home() {
         {/* AI Editor Page */}
         {currentPage === "ai-editor" && (
           <div className="animate-fadeIn">
+            <div className="mb-8 bg-white rounded-[2rem] p-4 border border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-[999px] bg-blue-100 flex items-center justify-center text-blue-600 font-bold">U</div>
+                <div>
+                  <p className="font-semibold text-gray-800">学习者档案</p>
+                  <p className="text-xs text-gray-500">{storage.examScope ? "考试范围已配置" : "请先配置考试范围"}</p>
+                </div>
+              </div>
+              <button className="px-4 py-2 rounded-[999px] bg-gray-100 text-sm">编辑资料</button>
+            </div>
             <div className="mb-8">
               <h2 className="text-[clamp(1.5rem,3vw,2rem)] font-bold text-gray-800 mb-2">
                 AI 学习计划管理
@@ -1111,17 +1124,12 @@ export default function Home() {
         </div>
       )}
 
-      {showModals.recycle && (
+      {showModals.todoComposer && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="bg-white rounded-[2rem] w-full max-w-2xl h-[80vh] flex flex-col animate-slideUp">
             <div className="flex justify-between items-center p-6 border-b">
-              <h3 className="text-xl font-bold">回收站</h3>
-              <button
-                onClick={() => closeModal("recycle")}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
+              <h3 className="text-xl font-bold">添加今日待办</h3>
+              <button onClick={() => closeModal("todoComposer")} className="text-gray-400 hover:text-gray-600"><X className="w-6 h-6" /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
               {(storage.recycleBin || []).length === 0 ? (
@@ -1145,7 +1153,10 @@ export default function Home() {
                 清空回收站
               </button>
             </div>
+            <button onClick={() => { setHtmlComposerTab("manual"); setEditingHtmlId(null); setHtmlName(""); setHtmlCode(""); }} className="absolute left-5 bottom-5 w-12 h-12 rounded-[999px] bg-white border shadow flex items-center justify-center"><Plus className="w-5 h-5" /></button>
+            <button onClick={() => { setHtmlComposerTab("manual"); setEditingHtmlId(null); setHtmlName(""); setHtmlCode(""); }} className="absolute right-5 bottom-5 w-14 h-14 rounded-[999px] bg-blue-600 text-white shadow flex items-center justify-center"><Plus className="w-6 h-6" /></button>
           </div>
+          )}
         </div>
       )}
 
