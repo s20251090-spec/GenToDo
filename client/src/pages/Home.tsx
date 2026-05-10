@@ -62,6 +62,22 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [editingTodo, setEditingTodo] = useState<any | null>(null);
+  const [editingTodoText, setEditingTodoText] = useState("");
+  const [swipeProgress, setSwipeProgress] = useState<Record<number, number>>({});
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [deepForm, setDeepForm] = useState<any>({
+    name: "",
+    type: "期中考试",
+    customType: "",
+    weekdayMinutes: "30分钟",
+    weekendMinutes: "30分钟",
+    examDate: "",
+    examRangeMode: "select",
+    selectedRange: "",
+    pastedRange: "",
+    otherReq: "",
+  });
   const [dailyTheme, setDailyTheme] = useState("");
   const [generationError, setGenerationError] = useState("");
   const [aiDetailView, setAiDetailView] = useState<"grid" | "chat" | "plan" | "scope" | "recycle">("grid");
@@ -261,6 +277,41 @@ export default function Home() {
     saveStorage(nextStorage);
   };
 
+  const handleOpenTodoEditor = (todo: any) => {
+    setEditingTodo(todo);
+    setEditingTodoText(todo.content || "");
+  };
+
+  const renderLongTextPlan = (text: string) => {
+    const lines = String(text || "").split("\n").filter(Boolean);
+    return (
+      <div className="space-y-2">
+        {lines.map((line, idx) => {
+          const l4 = /^\d+\.\d+\.\d+\.\d+/.test(line);
+          const l3 = !l4 && /^\d+\.\d+\.\d+/.test(line);
+          const l2 = !l4 && !l3 && /^\d+\.\d+/.test(line);
+          const l1 = !l4 && !l3 && !l2 && /^\d+\./.test(line);
+          const styled = line
+            .replace(/(学习目标：|学习方法：|配套练习：|易错点提示：|复盘要求：)/g, "<span class='text-blue-600 font-medium'>$1</span>")
+            .replace(/【核心考点】/g, "<span class='px-2 py-0.5 rounded bg-blue-100 text-blue-700 text-xs'>核心考点</span>")
+            .replace(/【高频考点】/g, "<span class='px-2 py-0.5 rounded bg-amber-100 text-amber-700 text-xs'>高频考点</span>")
+            .replace(/【易错考点】/g, "<span class='px-2 py-0.5 rounded bg-red-100 text-red-700 text-xs'>易错考点</span>")
+            .replace(/【了解即可】/g, "<span class='px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-xs'>了解即可</span>");
+          return <div key={idx} className={`${l1 ? "text-xl font-semibold border-b-2 border-blue-500 pb-2 mt-6" : l2 ? "ml-6 pl-3 border-l-4 border-blue-400 text-lg font-medium mt-4" : l3 ? "ml-12 text-[15px] font-medium text-slate-800" : l4 ? "ml-20 bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-700" : "text-sm"} leading-7`} dangerouslySetInnerHTML={{ __html: styled }} />;
+        })}
+      </div>
+    );
+  };
+
+  const handleSaveTodoEditor = () => {
+    if (!editingTodo) return;
+    const todayKey = getTodayKey();
+    const todayTodos = [...(storage?.todoHistory?.[todayKey] || [])];
+    const nextTodos = todayTodos.map((t: any) => (t.id === editingTodo.id ? { ...t, content: editingTodoText } : t));
+    saveStorage({ ...storage, todoHistory: { ...(storage.todoHistory || {}), [todayKey]: nextTodos } });
+    setEditingTodo(null);
+  };
+
   const handleOpenTodoComposer = () => {
     setComposerTab("ai");
     openModal("todoComposer");
@@ -272,13 +323,14 @@ export default function Home() {
   };
 
   const handleCreateMasterPlan = async () => {
-    if (!newPlanName.trim() || !newPlanRange.trim()) return alert("请填写计划名称和范围");
-    const prompt = `根据以下学习范围生成总计划（markdown列表）:\n${newPlanRange}`;
+    const planName = (deepForm.name || newPlanName || "").trim();
+    if (!planName || !newPlanRange.trim()) return alert("请填写计划名称和范围");
+    const prompt = `prom-yi2(1)(a+)\n(计划名称): ${planName}\n(计划类型): ${deepForm.type === "其他" ? deepForm.customType : deepForm.type}\n(考试截止日期): ${deepForm.examDate || "未设置"}\n(工作日可用时间): ${deepForm.weekdayMinutes}\n(周末可用时间): ${deepForm.weekendMinutes}\n(考试范围): ${newPlanRange}\n(其他要求): ${deepForm.otherReq || "无"}`;
     setAiLoading(true);
     try {
       const result = await generatePlanMutation.mutateAsync({ prompt });
       const content = result.result;
-      const plan = { id: String(Date.now()), name: newPlanName.trim(), content, time: new Date().toISOString().slice(0, 10) };
+      const plan = { id: String(Date.now()), name: planName, content, time: new Date().toISOString().slice(0, 10) };
       const planList = [plan, ...(storage.planList || [])];
       const nextStorage = { ...storage, planList, totalPlan: content };
       saveStorage(nextStorage);
@@ -667,9 +719,24 @@ export default function Home() {
                 </div>
               ) : (
                 todos.map((todo) => (
-                  <div key={todo.id} className="bg-white rounded-[2rem] shadow-sm p-5 border border-gray-100 flex items-center gap-4">
+                  <div
+                    key={todo.id}
+                    className="bg-white rounded-[2rem] shadow-sm p-5 border border-gray-100 flex items-center gap-4 relative overflow-hidden"
+                    onTouchStart={(e) => setTouchStartX(e.touches[0]?.clientX ?? null)}
+                    onTouchMove={(e) => {
+                      if (touchStartX === null) return;
+                      const delta = Math.max(0, (e.touches[0]?.clientX ?? touchStartX) - touchStartX);
+                      setSwipeProgress((prev) => ({ ...prev, [todo.id]: Math.min(100, Math.round((delta / 140) * 100)) }));
+                    }}
+                    onTouchEnd={() => {
+                      if ((swipeProgress[todo.id] || 0) >= 100) handleToggleTodo(todo.id);
+                      setSwipeProgress((prev) => ({ ...prev, [todo.id]: 0 }));
+                      setTouchStartX(null);
+                    }}
+                  >
+                    <div className="absolute left-0 bottom-0 h-1 bg-blue-500 transition-all" style={{ width: `${swipeProgress[todo.id] || 0}%` }} />
                     <input type="checkbox" checked={!!todo.completed} onChange={() => handleToggleTodo(todo.id)} className="w-5 h-5" />
-                    <div className="text-gray-800 text-sm">
+                    <div className="text-gray-800 text-sm flex-1" onContextMenu={(e) => { e.preventDefault(); handleOpenTodoEditor(todo); }}>
                       <MarkdownRenderer content={todo.content} />
                     </div>
                     <button onClick={() => handleDeleteTodo(todo.id)} className="ml-auto text-red-500 text-xs px-3 py-1 rounded-[999px] bg-red-50">删除</button>
@@ -942,15 +1009,34 @@ export default function Home() {
                   )}
                 </div>
                 {(storage.planList || []).find((p: any) => p.id === selectedPlanId)?.content || storage.totalPlan ? (
-                  <MarkdownRenderer content={(storage.planList || []).find((p: any) => p.id === selectedPlanId)?.content || storage.totalPlan} className="prose prose-sm" />
+                  <div className="max-h-[420px] overflow-y-auto rounded-[2rem] border border-gray-100 p-4">
+                    {renderLongTextPlan((storage.planList || []).find((p: any) => p.id === selectedPlanId)?.content || storage.totalPlan)}
+                  </div>
                 ) : (
                   <div className="text-center text-gray-400 py-12">暂无可查看计划</div>
                 )}
                 <div className="bg-white border border-gray-100 rounded-[2rem] p-4 space-y-3">
                   <h4 className="font-semibold">新建总计划</h4>
-                  <input value={newPlanName} onChange={(e) => setNewPlanName(e.target.value)} className="w-full bg-gray-50 rounded-[1.25rem] px-4 py-3" placeholder="计划名称" />
+                  <input value={deepForm.name} onChange={(e) => setDeepForm((p: any) => ({ ...p, name: e.target.value }))} className="w-full bg-gray-50 rounded-[1.25rem] px-4 py-3" placeholder="名称：第一次考试复习总计划" />
+                  <select value={deepForm.type} onChange={(e) => setDeepForm((p: any) => ({ ...p, type: e.target.value }))} className="w-full bg-gray-50 rounded-[1.25rem] px-4 py-3"><option>期中考试</option><option>期末考试</option><option>外语学习</option><option>其他</option></select>
+                  {deepForm.type === "其他" && <input value={deepForm.customType} onChange={(e) => setDeepForm((p: any) => ({ ...p, customType: e.target.value }))} className="w-full bg-gray-50 rounded-[1.25rem] px-4 py-3" placeholder="自定义类型" />}
+                  <input value={deepForm.weekdayMinutes} onChange={(e) => setDeepForm((p: any) => ({ ...p, weekdayMinutes: e.target.value }))} className="w-full bg-gray-50 rounded-[1.25rem] px-4 py-3" placeholder="每天（工作日）可用总时间" />
+                  <input value={deepForm.weekendMinutes} onChange={(e) => setDeepForm((p: any) => ({ ...p, weekendMinutes: e.target.value }))} className="w-full bg-gray-50 rounded-[1.25rem] px-4 py-3" placeholder="每天（周末）可用总时间" />
+                  <input type="date" value={deepForm.examDate} onChange={(e) => setDeepForm((p: any) => ({ ...p, examDate: e.target.value }))} className="w-full bg-gray-50 rounded-[1.25rem] px-4 py-3" />
                   <textarea value={newPlanRange} onChange={(e) => setNewPlanRange(e.target.value)} className="w-full bg-gray-50 rounded-[1.25rem] px-4 py-3 min-h-[100px]" placeholder="考试范围 / 学习范围" />
+                  <textarea value={deepForm.otherReq} onChange={(e) => setDeepForm((p: any) => ({ ...p, otherReq: e.target.value }))} className="w-full bg-gray-50 rounded-[1.25rem] px-4 py-3 min-h-[80px]" placeholder="其他要求（弱项等）" />
                   <button onClick={handleCreateMasterPlan} disabled={aiLoading} className="bg-blue-600 text-white rounded-[999px] py-2 px-5">{aiLoading ? "生成中..." : "AI生成总计划"}</button>
+                  <button
+                    onClick={async () => {
+                      const existing = (storage.planList || []).find((p: any) => p.id === selectedPlanId)?.content || "";
+                      const modifyPrompt = `prom-yi2(1)(a+)\n\n${existing}\n\n重点观察以下：修改（${inputValue || "请按用户最新要求调整"}），谢谢！`;
+                      const result = await generatePlanMutation.mutateAsync({ prompt: modifyPrompt });
+                      setGeneratedMarkdown(result.result);
+                    }}
+                    className="bg-gray-100 text-gray-700 rounded-[999px] py-2 px-5 ml-2"
+                  >
+                    AI修改链路
+                  </button>
                 </div>
               </div>
             </div>
@@ -1153,6 +1239,19 @@ export default function Home() {
             <button onClick={() => { setHtmlComposerTab("manual"); setEditingHtmlId(null); setHtmlName(""); setHtmlCode(""); }} className="absolute right-5 bottom-5 w-14 h-14 rounded-[999px] bg-blue-600 text-white shadow flex items-center justify-center"><Plus className="w-6 h-6" /></button>
           </div>
           )}
+        </div>
+      )}
+
+      {editingTodo && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] p-6 w-full max-w-md">
+            <h3 className="font-bold mb-3">编辑待办</h3>
+            <textarea value={editingTodoText} onChange={(e) => setEditingTodoText(e.target.value)} className="w-full min-h-[140px] bg-gray-50 rounded-[1rem] p-3" />
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setEditingTodo(null)} className="px-4 py-2 rounded-[999px] bg-gray-100">取消</button>
+              <button onClick={handleSaveTodoEditor} className="px-4 py-2 rounded-[999px] bg-blue-600 text-white">保存</button>
+            </div>
+          </div>
         </div>
       )}
 
