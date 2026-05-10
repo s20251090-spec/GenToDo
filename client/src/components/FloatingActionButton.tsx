@@ -10,6 +10,8 @@ export interface FloatingActionButtonProps {
   left?: string;
   zIndex?: number;
   primaryColor?: string;
+  showDailyPlan?: boolean;
+  showModifyPlan?: boolean;
 }
 
 const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
@@ -22,6 +24,8 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
     left,
     zIndex = 999,
     primaryColor = '#165DFF',
+    showDailyPlan = true,
+    showModifyPlan = true,
   } = props;
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -46,6 +50,19 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
     e.stopPropagation();
   }, []);
 
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    setTouchStartY(e.touches[0]?.clientY ?? null);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (touchStartY === null) return;
+    const currentY = e.touches[0]?.clientY ?? touchStartY;
+    if (currentY - touchStartY > 60) {
+      closeDrawer();
+      setTouchStartY(null);
+    }
+  }, [touchStartY, closeDrawer]);
+
   const cssVars = {
     '--fab-primary-color': primaryColor,
     '--fab-z-index': zIndex.toString(),
@@ -66,7 +83,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
         onClick={stopPropagation}
       >
         <div className="fab-drawer__drag-bar" />
-        <h3 className="fab-drawer__title">Learning Tools</h3>
+        <h3 className="fab-drawer__title">学习工具</h3>
 
         <div className="fab-drawer__menu-list">
           <button
@@ -77,8 +94,8 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = (props) => {
               <i className="fa-solid fa-route" />
             </div>
             <div className="fab-drawer__menu-text">
-              <h4>Make Master Study Plan</h4>
-              <p>Customize your full learning roadmap</p>
+              <h4>制作总学习计划表</h4>
+              <p>自定义你的完整学习路线图</p>
             </div>
           </button>
 

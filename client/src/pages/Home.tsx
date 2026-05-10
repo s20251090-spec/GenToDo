@@ -1094,7 +1094,7 @@ export default function Home() {
         </div>
       )}
 
-      {showModals.recycle && (
+      {showModals.todoComposer && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
           {htmlPreviewDoc && (
             <div className="bg-white w-full h-full relative">
